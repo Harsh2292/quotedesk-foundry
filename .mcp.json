@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp"
+    },
+    "codebase-memory": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "codebase-memory-mcp"
+      ],
+      "env": {}
+    }
+  }
+}

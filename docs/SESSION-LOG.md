@@ -1,0 +1,1108 @@
+# Session log
+
+Append-only handover notes. Context does not survive between Claude Code sessions — this file is what
+does. Newest at the bottom. Written with `/session-log`.
+
+---
+
+## 2026-08-26 — Project set up, no code yet
+
+**Done:** Repository scaffolding only — CLAUDE.md, seven path-scoped rules, four skills, three
+subagents, four hooks, the docs, and eleven task files. No solution, no projects, no code.
+
+**Files that matter:** `tasks/README.md` is the work queue and the only place status lives.
+`docs/SPEC.md` is the contract. `docs/DOMAIN.md` holds the business rules and the worked example
+every test validates against.
+
+**Decisions made:**
+- RFQ-to-quotation chosen because the loop closes on itself — an enquiry arrives, a quotation leaves,
+  nothing obviously missing around it.
+- Architecture is a **fixed pipeline with one autonomous stage**. Extract → Resolve → Price → Approve
+  never reorders. Autonomy lives only inside Resolve. Price is C#. This is deliberate and is the main
+  thing to be able to explain.
+- **EF Core, not Dapper** — more common in job descriptions, and migrations are a demonstrable thing.
+  `AsNoTracking()` on all reads; entities never leave `QuoteDesk.Data`.
+- Pricing lives in a dependency-free `QuoteDesk.Domain` so it can be shown to be untouched by the LLM.
+- Intake is one `IncomingEnquiry` record with three adapters, shipped in risk order: paste, email
+  (IMAP), WhatsApp (Twilio sandbox). Meta Cloud API is optional and off the critical path.
+- **Audio is not transcribed.** Voice notes are stored and played; the enquiry is marked
+  `needs_manual_entry`. Images may be read by a multimodal model on the gemini profile, optionally,
+  in task 09.
+- **Gemini is the default provider** (Harsh already has a key). ~1000+ requests/day, enough for the
+  public demo and for repeated eval runs, and it reads images so one key covers every channel.
+  GitHub Models stays configured as a fallback and a control. Azure is the deploy target only —
+  free-tier subscription, no Azure OpenAI.
+- Task 00 added: a throwaway twenty-minute spike proving tool calling works on the Gemini key before
+  anything depends on it. If streaming plus tools is broken there, the fallback is to run the tool
+  loop non-streaming and stream only the final narration — the trace panel is driven by server
+  AgentEvents, not model tokens, so the UI is unaffected.
+
+**Known gaps:** Everything. Start at task 01.
+
+**Blocked on Harsh:** Nothing. The Gemini key and the Azure subscription are already in hand. A
+mailbox with an app password is needed for the email adapter in task 09, and a Twilio account for
+WhatsApp in the same task — neither blocks anything before then, and task 09 ships email first
+deliberately.
+
+**Next:** Task 00 — environment, repo and provider spike. This is the only command needed to start:
+`/task 00`.
+
+---
+
+## 2026-08-29 — Task 00 (parts 1–3 done, 4–5 outstanding)
+
+**Done:** The plan was read and challenged; 22 findings raised and four decisions taken (below).
+Repo initialised, 44 files in one local commit `57b55e3 chore: project setup`. **Not pushed** — see
+"Blocked". Hooks made executable and the exec bit forced into the git index with
+`git update-index --chmod=+x`, since Windows leaves `core.filemode` unset and the plain `chmod`
+recorded nothing. Added `.gitattributes` because `core.autocrlf=true` would hand the hook scripts
+CRLF endings on re-checkout and break bash.
+
+**Files that matter:** `docs/SPEC.md` §7 and `docs/DOMAIN.md` — both need the schema edits agreed
+today and not yet written. `tasks/task-00-environment.md` still reads `todo`.
+
+**Decisions made:**
+- **Schema gaps get fixed before task 02**, not after. SPEC §7 cannot store the worked example's
+  approved outcome: `Quotes` needs `ShipTo`/`RequiredBy`/`Freight`/`ValidUntil`; `QuoteLines` needs
+  `RequiresOverride`/`MarginShortfallPct`/`DispatchDate`/`DeliveryDate`; `Customers` needs
+  `ShipToZone`; and `EnquiryAttachments`, `Approvals` and `WorkflowCheckpoints` do not exist at all.
+- **`PriceRules` holds quantity slabs only**, loaded by a repository and passed into
+  `SlabDiscountPolicy` as a parameter — Domain has zero references and cannot read a database. Tier
+  percentages, the 10% margin floor, 18% GST, 15-day validity, freight zones and the holiday calendar
+  are constants in Domain. Cost accepted: changing a holiday is a code change, not a data edit.
+- **The spike also probes workflow suspend/resume**, not just tool calling. That risk was otherwise
+  untested until task 06.
+- **Never run `git commit` or `git push`** — stage and propose the message; Harsh commits. Applies in
+  auto mode too. The history is part of the portfolio.
+
+**Agent Framework, confirmed by `api-researcher`:** packages are GA and target `net10.0`;
+`Microsoft.Agents.AI` and `.OpenAI` are both **1.19.0**, so SPEC §4's "1.5.0" is stale. SPEC §5's
+`AsAIAgent` snippet is correct as written. Tools attach per agent instance via
+`ChatClientAgentOptions.ChatOptions.Tools`, so two disjoint registries genuinely work. Human-in-the-loop
+is first-class: `WorkflowBuilder` + `RequestPort.Create<TReq,TResp>` + `RequestInfoEvent` +
+`handle.SendResponseAsync`. Checkpointing ships `FileSystemJsonCheckpointStore` and `CosmosCheckpointStore`
+but **no SQL store** — task 06 should implement `ICheckpointStore<JsonElement>` over the
+`WorkflowCheckpoints` table. Rehydration needs a stable `ChatClientAgentOptions.Id` per agent.
+`RunStreamingAsync` yields message-level `AgentRunResponseUpdate`s, **not token deltas**, so SPEC §9's
+`token` event will be chunkier than the UI design assumes. No official `IChatClient` test double exists;
+task 06 writes its own fake.
+
+**Known gaps:** `jq` is **not installed**, so `guard-paths.sh` and `guard-bash.sh` both `exit 0` and
+protect nothing — SETUP.md's "hooks are law" is false until it is. Docker daemon not running. The
+Gemini key is set nowhere. Parts 4 and 5 of task 00 are untouched: no spike has run, so the streaming
+verdict is still unknown, and the SPEC/DOMAIN edits above are still unwritten.
+
+**Blocked on Harsh:** Install `jq` (`winget install jqlang.jq`) and restart Claude Code. Start Docker
+Desktop. Decide whether local commit `57b55e3` stays or is undone with `git reset --soft HEAD~1`.
+Set the Gemini key via `dotnet user-secrets` once the spike project exists.
+
+**Next:** Finish task 00 — parts 4 and 5. The spike settles the one genuine unknown (tool calling on
+Gemini, streaming and not) before anything depends on it.
+
+## 2026-08-29 — Setup simplification (no task number)
+
+**Done:** Cut the Claude Code configuration from 19 files to 4 and the instruction docs from ~1,600
+lines to ~700. All hooks removed at Harsh's instruction — the two guard hooks were inert anyway
+(no `jq`), and `settings.json`'s `deny` list enforces the same protections through the harness,
+which cannot fail open. `.claude/rules/` deleted entirely; its content merged into `CLAUDE.md`,
+which is now the single always-loaded instruction file. `dotnet-reviewer` and `spec-auditor`
+removed in favour of the built-in `/code-review`. `/verify-all` and `/adr` removed — the three
+verification commands are written into `CLAUDE.md` and the task skill directly. `SETUP.md` deleted
+(it claimed "hooks are law", which was false).
+
+**Deploy moved from task 11 to task 09.** Channels became 10; observability, evals and the README
+became 11. `SPEC.md` trimmed to what sessions 1–2 actually build.
+
+**Files that matter:** `CLAUDE.md` (everything always-loaded now lives here), `tasks/README.md`
+(new order and the reasoning), `tasks/task-09-deploy.md` (new).
+
+**Decisions made:** Ship the paste path to a public URL as soon as it works, before channels,
+telemetry or evals. The previous project (WebLibrary) was never finished, so momentum risk outranks
+completeness. Process and scaffolding count as scope and were cut on the same grounds.
+
+**Known gaps:** No `.cs` file exists yet. Docker daemon not running. The Gemini key is set nowhere.
+Task 00 parts 4 and 5 are untouched — no spike has run, so the streaming verdict is still unknown.
+`jq` is no longer needed by anything.
+
+**Blocked on Harsh:** Start Docker Desktop. Have the Gemini API key ready for `dotnet user-secrets`
+once the spike project exists. Decide whether local commit `57b55e3` stays or is undone.
+
+**Next:** Task 00, parts 4 and 5 — the provider spike. It settles the one genuine unknown (tool
+calling on Gemini, streaming and not) before anything depends on it.
+
+## 2026-08-29 — Task 00, parts 1–3 (still `in progress`)
+
+**Done:** Machine verified green — .NET SDK 10.0.302, Node v24.16.0, Docker 29.6.1 with the daemon
+**running** (it was down last session), git 2.50.1, `dotnet-ef` 10.0.8 already installed. Nothing is
+missing; no installs are outstanding.
+
+Gemini key validated against `https://generativelanguage.googleapis.com/v1beta/openai/` — HTTP 200
+on `GET /models`. The account reaches far more than the spec assumed: `gemini-2.5-flash`/`-pro`,
+`gemini-3.5-flash`, `gemini-3.6-flash`, `gemini-3.1-pro`. Recorded in SPEC.md §4, along with the rule
+to pin an exact model id rather than the `gemini-flash-latest` alias, which would break eval
+reproducibility.
+
+Spike project scaffolded at `<scratchpad>/spike` — .NET 10 console, `OpenAI` **2.13.0**. Outside the
+repo, so it cannot be committed by accident. `Program.cs` is not written yet.
+
+**Files that matter:** `docs/SPEC.md` §4 (verified provider findings), `tasks/task-00-environment.md`
+(parts 4–5 remain), `CLAUDE.md`.
+
+**Decisions made:** API signatures are verified by grepping the installed package's XML docs under
+`~/.nuget/packages/`, not by spawning the `api-researcher` subagent — the docs are exact for the
+resolved version and cost one command. The subagent is now reserved for behavioural questions
+(can a workflow resume after a process restart, preview status, provider quirks), expected once in
+the whole project. `CLAUDE.md` and the task skill were updated to say so.
+
+**Known gaps:** **The provider spike has not run.** The streaming-plus-tool-calls verdict is still
+unknown — the one genuine unknown in the project. No model id chosen yet. No `.cs` file in the repo.
+
+**Blocked on Harsh:** Nothing. The key works and the machine is ready.
+
+**Next:** Task 00 parts 4 and 5 — write the spike `Program.cs`, run it non-streaming and streaming,
+record the verdict, delete the spike. Roughly twenty minutes, and task 01 should not start before it.
+
+**Note:** the API key was pasted into the chat transcript. Rotate it in Google AI Studio once the
+demo is finished.
+
+## 2026-08-29 — Task 00 done
+
+**Done:** Environment fully verified (.NET 10.0.302, Node 24.16, Docker 29.6.1 daemon up, git,
+`dotnet-ef`). Provider spike ran and answered the one real unknown: on the Gemini OpenAI-compat
+layer, non-streaming tool calls work end to end; streaming tool calls fail with `400` because
+Gemini's 3.x thinking models require a `thought_signature` on replayed function-call parts that the
+OpenAI wire schema has no field for — confirmed with a raw curl repro, so it's a real protocol gap,
+not our bug. Task 00 is `done`.
+
+**Files that matter:** `docs/SPEC.md` §4 (pinned model, full verdict and reasoning),
+`tasks/task-00-environment.md` (Notes on completion).
+
+**Decisions made:** Pin `gemini-3.6-flash` — `gemini-2.5-flash` (the id SPEC.md originally assumed)
+is `404` for new keys, retired by Google. Tool-calling loop in `QuoteDesk.Agents` runs non-streaming
+everywhere; only the closing narration streams. No architecture change — the trace panel already
+runs on server-emitted `AgentEvent`s, not model tokens, so this was the fallback SPEC.md already
+planned for.
+
+**Known gaps:** No `.cs` file exists yet — task 01 is the first real code. Spike deleted, nothing
+left in the scratchpad.
+
+**Blocked on Harsh:** Nothing.
+
+**Next:** Task 01 — setup and skeleton. Build the solution and the six projects per `CLAUDE.md`'s
+layout, wired `Api → Agents → Data → Domain`, `Intake → Api`, before any real logic.
+
+## 2026-08-29 — Tasks 01 + 03 + 02 done (built together, deliberately)
+
+**Done:** Solution builds clean under `-warnaserror` (5 source + 3 test projects, `Api → Agents →
+Data → Domain` and `Api → Intake → Data`). SQL Server runs via `docker-compose.yml` and is migrated.
+Every pricing rule in `docs/DOMAIN.md` is implemented in `QuoteDesk.Domain` and proven — including a
+single test reproducing the Shreeji Textiles worked example exactly (8% discount, 14% margin, belt
+missing its date). The database is seeded deterministically (25 customers, 262 catalogue items, 1,200
+order-history rows, 12 enquiries) with all six deliberate cases individually queryable. Vite/React
+health-check page confirmed working end to end against the live Api through the dev-server proxy. 35
+unit tests + 14 real-container integration tests, all passing.
+
+**Files that matter:** `CLAUDE.md` (dependency-graph line, corrected), `docs/DOMAIN.md` ("The
+numbers, filled in by task 03"), `src/QuoteDesk.Data/Seed/DeterministicSeeder.cs`.
+
+**Decisions made:** Built 01+03+02 in one sitting, not separately — justified because all three are
+foundation with zero external unknowns, and task 03 was done *before* 02 (its own "depends on 02" is
+wrong: Domain has no references at all). Google OpenID Connect replaces the JWT-bearer plan for task
+07 (Harsh's instruction; `docs/SPEC.md` §3 and task 07 updated). Docker Desktop's containerd
+snapshotter was breaking every pull from `mcr.microsoft.com`; fixed by disabling it in Docker
+Desktop's own settings — a machine-local toggle, not a repo change.
+
+**Known gaps:** Seed data is 262 catalogue items / 16 price rules, not the spec's ~300 / ~40 —
+documented as a deliberate simplification in task 02's Notes on completion. `IEnquiryRepository` is
+read-only; task 04 adds the write path.
+
+**Committed:** `142d0c3` on `development`, local only (not pushed). Re-verified build/tests
+immediately before committing — still 0 warnings, 49/49 tests passing. `QuoteDesk.Web`'s
+`node_modules` and `dist` are gitignored as usual; nothing else was left uncommitted.
+
+**Machine state for next session:** SQL Server container (`quotedesk-sql`) is up and seeded — no
+need to re-run `docker compose up -d` or the `--seed` flag unless the volume is removed. To browse
+the data directly (SSMS / Azure Data Studio / VS Code's mssql extension): server `localhost,1433`,
+SQL auth, login `sa`, password `QuoteDesk!Local1` (the `docker-compose.yml` local-dev default, not a
+real secret), check "Trust server certificate".
+
+**Blocked on Harsh:** Nothing.
+
+**Next:** Task 04 — intake abstraction and paste adapter.
+
+## 2026-08-29 — Task 04a: Google sign-in and a Users table
+
+**Done:** React gets a Google ID token and posts it to `POST /api/auth/google`; the Api verifies it
+against Google, auto-provisions a `Users` row keyed on the `sub` claim, and mints its own bearer JWT.
+Every route requires that token by default via a fallback authorization policy — `/health/*` and
+`/api/auth/google` are the only exceptions. Verified live: `/health/live` → 200, `/api/auth/me` with
+no token → 401, `/api/auth/google` with a bad token → 401 with a real Google JWKS round-trip and no
+exception text in the body. **Also verified through an actual browser**: Harsh signed in with a real
+Google account at `localhost:8080`, and the `Users` row landed correctly — `pharshin29@gmail.com`,
+role `admin` (matched from `Auth:AdminEmails`), `CreatedAt == LastLoginAt` on first sign-in.
+
+**Files that matter:** `src/QuoteDesk.Api/Program.cs` (auth wiring, the fallback-policy line),
+`src/QuoteDesk.Api/Auth/`, `tests/QuoteDesk.IntegrationTests/Api/QuoteDeskApiFactory.cs`.
+
+**Decisions made:** Pulled forward from task 07 so every endpoint from task 04 on is protected by
+construction. Bearer JWT, not a cookie — the prod split between Static Web Apps and Container Apps
+would break cookie auth, and `EventSource` (needed for SSE) can't send an `Authorization` header
+either way, so `useAgentStream` will use `fetch`+`ReadableStream` instead (CLAUDE.md updated).
+`docs/SPEC.md` §3/§9 and `tasks/task-07-api.md` updated in the same commit — this expands "no user
+system to build" by exactly one auto-provisioned table, nothing more.
+
+**Known gaps:** `WebApplicationFactory`'s `ConfigureAppConfiguration` is ineffective here — Program.cs
+reads config before `Build()` — so the test factory uses environment variables instead; found and
+fixed before it could touch the real dev database. No rate limit on `/api/auth/google` yet (task 07).
+
+**Blocked on Harsh:** Nothing. (`.claude/settings.json`'s `Read(./.env.*)` deny rule blocked writing
+`.env.example` — narrowed to `Read(./.env)` + `Read(./.env.local)` on his explicit instruction;
+`.env.example` now exists, `src/QuoteDesk.Web/.env.local` holds the real Client ID he created by hand.)
+
+**Next:** Task 04 — intake abstraction and paste adapter.
+
+## 2026-08-29 — Tasks 04 + 05: intake, paste adapter, and the seven typed tools
+
+**Done:** `POST /api/enquiries` stores a pasted enquiry (behind the task 04a auth policy) via
+`QuoteDesk.Intake`'s `PasteAdapter`, blank-body-with-attachments correctly landing on
+`needs_manual_entry`. All seven tools from docs/SPEC.md §7 now exist in `QuoteDesk.Agents.Tools` as
+plain, fully-tested C# — `search_catalog` resolves "25mm PU belt" cleanly and comes back ambiguous
+for "ring frame spindle tape" + "thicker" across all eight seeded thicknesses;
+`price_quote` reproduces the worked example's 8%/14% exactly; `create_quote_draft`/`send_quote`
+round-trip a quote to `sent` with a `QTN-` number. No agent or LLM call exists yet — these are still
+ordinary methods with tests, called directly.
+
+**Files that matter:** `src/QuoteDesk.Agents/Tools/` (all seven tools + both registries),
+`src/QuoteDesk.Intake/PasteAdapter.cs`, `docs/SPEC.md` §6/§7 (three signature corrections, explained
+inline), `tasks/task-04-intake.md` and `task-05-tools.md` Notes on completion (full detail).
+
+**Decisions made:** `search_catalog` returns `CatalogSearchResult` not `CatalogMatch[]`;
+`price_quote` takes `int? customerId` for the unknown-sender case; `create_quote_draft` returns a
+typed `QuoteDraftResult`. `MarginShortfallPct` is never carried past `QuoteDesk.Domain` — only the
+`RequiresOverride` bool reaches any tool result or column. `[AIFunctionName]` avoided (marked
+`[Experimental("MEAI001")]` in `Microsoft.Extensions.AI.Abstractions` 10.9.0); tool names set via
+`AIFunctionFactoryOptions.Name` instead. Two xUnit test classes hitting the same fixed test-database
+name in separate `IClassFixture`s race each other under parallel execution — fixed twice this
+session (Api tests, then Repository tests) by sharing one `[Collection(...)]`; **any new test class
+using `QuoteDeskApiFactory` or `RepositoryFixture` must join the existing collection, not declare its
+own `IClassFixture`.**
+
+**Known gaps:** `Quotes.ShipTo`/`RequiredBy` stay null — no Extract stage exists yet to populate them
+(task 06). `EnquiryAttachment` is a shape only, no table — task 10 adds storage when a real channel
+can attach a file. No agent, workflow, or prompt exists — task 06 is the first place an LLM is called
+outside the task 00 spike.
+
+**Blocked on Harsh:** Nothing.
+
+**Next:** Task 06 — agents and workflow. Wires `ReadToolRegistry` to an actual `AIAgent` for the
+Resolve stage; everything it will call already exists and is proven.
+
+## 2026-08-29 — Post-task-05 review: closed a real error-handling gap
+
+**Done:** Harsh asked for a review pass before task 06, specifically about exception handling. Found
+`QuoteDesk.Api` had **no global exception handler at all** — any unhandled exception (a DB hiccup, a
+malformed request) fell through to ASP.NET Core's raw error response instead of the RFC 9457
+`ProblemDetails` CLAUDE.md's Security section requires, and in Development/test it leaked a full
+stack trace. Reproduced concretely: two Google sign-ins with the same email but different subjects
+throws `DbUpdateException` uncaught by `AuthEndpoints`, which used to 500 with exception text in the
+body. Fixed with `builder.Services.AddProblemDetails()` + `app.UseExceptionHandler()` as the first
+middleware in the pipeline, and locked in with a new regression test that reproduces exactly that
+trigger and asserts the response body contains no exception type, stack frame, or index name. Also
+added two missing `ArgumentNullException.ThrowIfNull` guards (`CatalogTools.SearchCatalogAsync`'s
+`query`/`hints`, `CustomerTools.ResolveCustomerAsync`'s `senderId`) — the only two tool parameters
+touched directly (string concatenation, `.IndexOf`) before any null check, unlike every other
+array/object parameter this session, which all already guarded consistently.
+
+**Files that matter:** `src/QuoteDesk.Api/Program.cs` (the two new lines),
+`tests/QuoteDesk.IntegrationTests/Api/GlobalExceptionHandlingTests.cs`.
+
+**Decisions made:** Harsh confirmed mid-review: build the MVP only for now, defer further
+production-grade hardening (rate limiting, deeper input validation, etc.) until after it works end to
+end — matching the standing `completion-over-sophistication` preference. This exception-handler fix
+was treated as in-scope regardless, since it is an explicit CLAUDE.md rule already in force, not new
+hardening; no further defensive-programming pass was done beyond the two guards above.
+
+**Known gaps:** Same as the entry above — nothing new introduced by this review. 124/124 tests
+passing (94 unit + 30 integration), 0 warnings under `-warnaserror`.
+
+**Blocked on Harsh:** Nothing.
+
+**Next:** Task 06 — agents and workflow, unchanged from above.
+
+## 2026-08-29 — Task 06: agents and workflow
+
+**Done:** The full pipeline runs — Extract → Resolve → Price → suspend at a real `RequestPort` →
+Approve — behind `EnquiryPipeline.StartAsync`/`ResumeAsync`. Proven against a stubbed `IChatClient`
+scripting the exact docs/DOMAIN.md worked example: real tool calls against the seeded DB resolve the
+bearings and belt, the spindle tape stays unresolved (no guess), Price computes the real 8%/14% in
+plain C# (never a model call), the run suspends with a `pending_approval` `AgentRun` row, and — via a
+second, independent `EnquiryPipeline` sharing only the SQL rows — resuming produces a real `QTN-`
+quote. A token-budget test proves a clean `budget_exceeded` with nothing partially written.
+
+**Files that matter:** `src/QuoteDesk.Agents/Pipeline/` (`EnquiryPipeline`, `QuoteDeskWorkflow`, four
+executors), `src/QuoteDesk.Agents/Checkpointing/SqlCheckpointStore.cs`,
+`tests/QuoteDesk.IntegrationTests/Agents/EnquiryPipelineTests.cs`, `docs/SPEC.md` §3/§4/§6/§7,
+`tasks/task-06-agents-workflow.md` Notes on completion (full API-verification detail).
+
+**Decisions made:** `Microsoft.Agents.AI.OpenAI` deliberately not added (build the agent from
+`IChatClient` instead — keeps stub-based tests clean). `price_quote` withheld from the Resolve agent;
+Price calls `PricingTools` directly. No structured output (`RunAsync<T>`) anywhere — Gemini's
+`json_schema` support is unverified, so every call parses fence-tolerant JSON from plain text
+(`ModelJson`) uniformly. Real workflow suspension via `RequestPort`, wired with plain `AddEdge` calls
+(not `AddExternalCall`, which always loops back to its own source — decompiled and confirmed wrong for
+this shape). Three behavioural questions went to `api-researcher` (auto function-invocation and
+iteration-cap semantics; routing a `RequestPort`'s response to a different node; resume republishing
+the pending request after a restart) — more than the project's usual "once," justified because this
+task's own text calls out checkpointing semantics as something to confirm first.
+
+**Known gaps:** `Program.cs` untouched — `AddQuoteDeskAgentPipeline` exists and is proven by tests but
+nothing in the running Api calls it; task 07 wires the SSE endpoint and decides whether a missing
+`Llm:ApiKey` should fail fast. No live call was made against real `gemini-3.6-flash` — everything is
+proven against a stub, per CLAUDE.md. Found and fixed a real concurrency bug along the way: the
+workflow's background checkpoint-write and the caller's own DB reaction can't share one scoped
+`DbContext` — `WorkflowCheckpointRepository` now uses its own `IDbContextFactory`-sourced context.
+
+**Blocked on Harsh:** One command, whenever convenient (not required for this task's own criteria):
+`dotnet user-secrets set "Llm:ApiKey" "<gemini key>" --project src/QuoteDesk.Api` — needed only for a
+live end-to-end run against the real model, which would settle whether `gemini-3.6-flash` accepts the
+tool-call argument shapes `AIFunctionFactory` expects.
+
+**Next:** Task 07 — API, streaming, auth, logging. Wires `EnquiryPipeline` behind
+`POST /api/enquiries/{id}/process` (SSE) and `POST /api/approvals/{id}`, binds `LlmOptions` in
+`Program.cs`.
+
+## 2026-08-30 — Task 07: API, streaming, auth, logging
+
+**Done:** `EnquiryPipeline` is reachable over HTTP behind the existing auth policy. `POST
+/api/enquiries/{id}/process` and `POST /api/approvals/{id}` (approve/reject) both stream `AgentEvent`s
+as SSE through one shared writer that also persists the run's full trace. `GET /api/enquiries/{id}`,
+`GET /api/approvals`, `GET /api/quotes`, `GET /api/quotes/{id}` all implemented. Proven end to end
+against the real docs/DOMAIN.md worked example with a scripted `IChatClient`: process suspends at
+approval with the spindle tape unresolved, approving resumes to a real `QTN-` quote, and the trace
+replays after the stream closes. A stubbed 429 proves `provider_rate_limited`. 156/156 tests pass
+(117 unit + 39 integration), 0 warnings under `-warnaserror`, `npm run build` clean.
+
+**Files that matter:** `src/QuoteDesk.Api/Streaming/AgentEventStreamWriter.cs` (the one place SSE
+framing exists), `src/QuoteDesk.Api/Approvals/` and `Quotes/` (new), `src/QuoteDesk.Data/Migrations/
+…AddAgentRunTrace`, `tests/QuoteDesk.IntegrationTests/Api/AgentStreamEndpointTests.cs`.
+
+**Decisions made:** Three scope questions settled with Harsh before coding — rate limiting deferred to
+task 09 (defends a URL that doesn't exist yet), the trace stored as one `AgentRuns.TraceJson` column
+appended by read-merge-rewrite, and approvals support only approve/reject (`edit` returns 400 until
+task 08 defines that payload). Full detail and reasoning in tasks/task-07-api.md's Notes on completion.
+
+**Known gaps:** No pipeline stage emits a `token` SSE event — Price's narration runs non-streaming
+(docs/SPEC.md §8 records this as a real task-06 gap, not fixed here; bigger than task 07's scope).
+Separately, `QuoteWriteTools.CreateQuoteDraftAsync` still hardcodes `ShipTo`/`RequiredBy` to null even
+though `ApprovalRequest` has carried real values since task 06 — found, not touched.
+
+**Live-Gemini finding, significant:** Harsh supplied a real key mid-session; the first-ever live run
+of the real pipeline (`tests/QuoteDesk.Evals/GeminiWorkedExampleEval.cs`, dev DB migrated to catch up
+first — it was 2 migrations behind) surfaced that the `thought_signature` protocol gap docs/SPEC.md
+already documented for *streaming* also breaks the **non-streaming** path: Extract succeeds,
+`resolve_customer` executes and returns a real result, and the very next turn — submitting that result
+back to the model — fails with the same `400 INVALID_ARGUMENT thought_signature` error. Task 00's
+spike verified non-streaming against one hand-rolled round trip, not the real `ChatClientAgent` /
+`FunctionInvokingChatClient` loop `ResolveExecutor` runs. **The whole Resolve stage cannot currently
+complete against real `gemini-3.6-flash`.** docs/SPEC.md §4 now records this correction in full; the
+eval fails on purpose as its regression test. A smaller, already-fixed finding from the same run: the
+model didn't reliably format `requiredBy` as ISO-8601 (`"5th"` on one run, valid on another) — fixed
+via a lenient converter plus a tighter prompt instruction, both in this commit.
+
+**Blocked on Harsh:** The `thought_signature` finding above needs a direction decision, not a guess —
+options include checking whether a newer `Microsoft.Agents.AI`/`Microsoft.Extensions.AI.OpenAI`
+release has addressed it, switching the default profile to `github` (SPEC.md §4: real OpenAI models,
+correct tool-calling, but ~50 req/day and an ~8K input cap — cannot carry the demo), or something else
+entirely. This blocks the Resolve stage working end to end against the pinned model, which blocks a
+real browser demo — everything else in tasks 06–07 is proven correct against a stub and does not
+depend on this being resolved.
+
+**Next:** Resolve the `thought_signature` non-streaming finding above before task 08, or explicitly
+decide to proceed with task 08 (React screens) anyway, since the UI can be built and demoed against
+stub-driven or replayed runs regardless. `src/QuoteDesk.Web/src/api/agentEvents.ts` is ready for
+`useAgentStream` to consume either way.
+
+## 2026-08-30 — Gemini `thought_signature` fix: adopted Google.GenAI
+
+**Done:** The `thought_signature` blocker above is resolved. Harsh asked whether OpenRouter or
+Google's native SDK would fix it; researched both — OpenRouter confirmed no fix (same OpenAI-compat
+shim, same error, per multiple independent GitHub issue reports), Google's official `Google.GenAI`
+.NET SDK confirmed a real fix (`api-researcher`: read the SDK's own source and decompiled this
+project's exact installed `FunctionInvokingChatClient` — the adapter round-trips the signature through
+a standard `TextReasoningContent.ProtectedData` field, which the loop never strips). Spiked first
+(isolated `resolve_customer` call, no pipeline involved) — passed. Adopted for real:
+`ChatClientFactory.Create` now branches on a new `LlmOptions.Provider` (`"gemini"` → `Google.GenAI`,
+`"github"` → unchanged `OpenAIClient`). Confirmed live through the actual `EnquiryPipeline`: Extract
+succeeded, `resolve_customer` **and** `get_customer_history` both completed multi-turn with real tool
+results — the exact call that failed before now works — before a genuine free-tier daily quota (20
+requests/day for `gemini-3.6-flash` on this key) cut the run short. 157/157 non-eval tests still pass.
+
+**Files that matter:** `src/QuoteDesk.Agents/Llm/ChatClientFactory.cs` (the branch + full reasoning),
+`src/QuoteDesk.Agents/Llm/LlmOptions.cs` (`Provider`), `docs/SPEC.md` §4 (full resolution write-up).
+
+**Decisions made:** Spike-then-adopt, not straight to production code — Harsh's call, to avoid
+touching `ChatClientFactory` before knowing it would work. Trade-off accepted knowingly: `Google.GenAI`
+takes an API key, not a base URL, so the `gemini` profile lost the "any OpenAI-compatible endpoint"
+swappability; `github` is unaffected. Found and fixed in the same pass: the two profiles now throw
+different exception types for a rate limit (`ClientResultException` vs `Google.GenAI.ClientError`) —
+the live quota hit proved this was a real gap, not hypothetical, so `EnquiryPipeline.ToErrorEvent` now
+matches both, with a new stub-based regression test.
+
+**Known gaps:** No single completely clean live run (Extract → Resolve → Price → `ApprovalRequiredEvent`)
+has completed yet — the free-tier quota (20 req/day for this model) was exhausted mid-verification.
+The multi-turn tool-calling mechanism itself is confirmed fixed (two real tool calls completed that
+previously failed on the very first one); what's unconfirmed is only the *rest* of the pipeline
+(Price's narration call, the full worked example's ambiguity handling) under the new client, which
+should behave identically since nothing else changed, but hasn't been watched happen end to end yet.
+
+**Blocked on Harsh:** Nothing required, but worth knowing: 20 requests/day is tight for a live public
+demo one Google account away from being useless — worth checking Google AI Studio for a way to raise
+this free-tier quota, or confirming this is expected for `gemini-3.6-flash` specifically, before task 09.
+
+**Next:** Once the daily quota resets, run `dotnet test tests/QuoteDesk.Evals --filter GeminiWorkedExampleEval`
+once more to confirm a fully clean pass, then proceed to task 08 (React screens) — nothing about the
+UI depends on this being re-verified first.
+
+## 2026-08-30 — Phase 0 result: gemini-3.1-flash-lite tested, rejected for quality
+
+**Done:** Ran the real worked example against `gemini-3.1-flash-lite` (a separate free-tier quota
+bucket from `gemini-3.6-flash`'s exhausted 20/day). Quota was not the limiting factor this time — the
+run consumed far more than 20 requests with no quota error at all, confirming per-model buckets are
+real and separate. But it failed on quality: `search_catalog("6203 bearing")` came back with **112
+weakly-scored candidates** (all confidence 0.2, matched only on the token "RING") instead of narrowing
+to the actual bearing, and the model then tried to disambiguate by calling `get_customer_history`
+one SKU at a time across many candidates — a brute-force exploration that burned 153,724 tokens against
+a 20,000 budget before `EnquiryPipeline`'s safety cap correctly stopped the run with `budget_exceeded`.
+Nothing wrong reached anywhere (the safety net worked exactly as designed), but the judgment quality
+was measurably worse than `gemini-3.6-flash`'s clean run on the identical enquiry.
+
+**Decision: stay on `gemini-3.6-flash`.** Per the plan agreed before this test: a demo that reasons
+this poorly is worse than one that occasionally runs out of quota. `tests/QuoteDesk.Evals/GeminiFlashLiteWorkedExampleEval.cs`
+kept in the repo as a real, dated record of this — not deleted — so a future session doesn't re-attempt
+the same switch without re-testing (and re-test is worth doing again later: this was one run, on a
+"Lite" model that may simply need a different, less open-ended prompt to search well, not necessarily
+a permanent verdict on the model itself).
+
+**Next:** Proceed to batching `search_catalog` (already approved, model-independent) — see the current
+plan for the concrete change.
+
+## 2026-08-30 — Batched search_catalog
+
+**Done:** `search_catalog` now resolves every line item in one call instead of one call per line —
+`(CatalogSearchQuery[] queries) -> CatalogSearchResult[]`, one result per query in the same order.
+For docs/DOMAIN.md's worked example this cuts Resolve from 6 real model calls to 4, and the whole
+pipeline from 8 to 6. No change was needed to `ResolveExecutor`, `TracedAIFunction`, or
+`ToolCallBudget` — none of them ever assumed one call resolved one line. 158/158 non-eval tests pass
+(118 unit + 40 integration — one new unit test added for the batch case), `npm run build` clean.
+
+**Files that matter:** `src/QuoteDesk.Agents/Tools/CatalogTools.cs`,
+`src/QuoteDesk.Agents/Tools/Results/CatalogResults.cs` (new `CatalogSearchQuery`, `CatalogSearchResult`
+gained a `Query` echo field), `src/QuoteDesk.Agents/Prompts/resolve.md`, docs/SPEC.md §7.
+
+**Decisions made:** Kept the tool name and read/write registry unchanged — only its signature changed,
+so `ToolRegistryTests`'s fixed name list needed no update. `CatalogSearchResult` gained a `Query` field
+(echoing which input it answers) so the model — and a human reading the trace panel — can map a
+batched call's results back to specific line items without relying on array position alone.
+
+**Known gaps:** None new. This closes out the batching work from the earlier assessment; the narration
+LLM-call-removal option from that same assessment was not picked and remains undone, on purpose.
+
+**Next:** Task 08 — React screens. Nothing about this session's work changes that scope.
+
+## 2026-08-30 — gemini-3.5-flash-lite tested, also rejected for quality
+
+**Done:** Harsh checked Google AI Studio's own rate-limit dashboard directly — real numbers, not blog
+guesses: `gemini-3.6-flash`/`gemini-3.7-flash`/`gemini-3 Flash` all cap at 20/day (matches what we
+already measured), but `gemini-3.5-flash-lite` shows 500/day. Worth testing on quota grounds alone.
+Ran the same rigorous worked-example eval used for `gemini-3.1-flash-lite`. Result: same class of
+failure, different mechanism — the batched `search_catalog` call itself (confirms batching works
+correctly against a real model) came back with a wildly over-broad candidate list (342 SKU mentions
+across the three line items, in a ~300-item catalogue), and the model burned 56,463 tokens against the
+20,000 budget trying to work through it before the safety cap stopped the run.
+
+**Now two different "Lite" models have failed this exact bar, for related but distinct reasons** —
+`3.1-flash-lite` over-explored via many small `get_customer_history` calls, `3.5-flash-lite` got a
+bloated result from one `search_catalog` call. Both point at the same underlying weakness: Lite-tier
+models construct less specific/tighter search queries than `gemini-3.6-flash` does, which this
+project's `CatalogTools` scoring is sensitive to. This is real, repeated signal, not a fluke — staying
+on `gemini-3.6-flash` as primary is the right call until/unless a Lite model gets a properly tuned
+prompt for this specific task (not attempted; out of scope right now).
+
+**Files that matter:** `tests/QuoteDesk.Evals/Gemini35FlashLiteWorkedExampleEval.cs` (new, kept as a
+dated record, same reasoning as the 3.1 variant).
+
+**Next:** Harsh asked about a fallback chain (gemini-3.6-flash primary, drop to a Lite model only once
+quota is truly exhausted) rather than switching the primary outright. Given both Lite candidates now
+have confirmed quality problems, this reframes as "worse but available beats nothing," not "just as
+good and free" — a real design worth doing carefully, not a quick win. Not started; needs its own scoping
+(mid-conversation model switching risk, whether to fall back per-run vs mid-run, how the trace panel
+shows which model actually answered).
+
+## 2026-08-30 — Session close: root cause refined, task 08 is next
+
+**Done:** Traced the `3.5-flash-lite` failure down to real data rather than guessing: the model's
+`search_catalog` query was reasonable ("PU timing belt", hint "25mm"); the 150-candidate flood was
+`CatalogTools.Score` matching every "Rubber Timing Belt" too, because it counts overlapping words
+without weighting the one that actually distinguishes the item (PU vs Rubber). **Corrects the earlier
+entry's framing** ("Lite models construct less specific queries") — the confirmed root cause is our
+own scoring code being too permissive, not the model's query construction. Separately, real: once
+handed a big/ambiguous list, `3.1-flash-lite` chose to brute-force it (many individual
+`get_customer_history` calls) instead of accepting ambiguity like the prompt instructs — that part is
+a genuine model-quality difference, not a code bug.
+
+**Decision:** Task 08 (React screens) starts next session, before any of today's follow-ups
+(`CatalogTools.Score` reweighting, a model-fallback chain). Both are real and worth doing, but
+deliberately parked — UI comes first.
+
+**Known gaps / parked for later:** `CatalogTools.Score` doesn't weight distinguishing words — worth
+fixing regardless of which model is used, and might be enough on its own to make a Lite model viable.
+A model-fallback chain (gemini-3.6-flash primary, Lite as last resort once quota's gone) discussed but
+not designed — needs its own scoping session.
+
+**Everything from today (task 07, the Google.GenAI/thought_signature fix, batched `search_catalog`,
+three eval files) is staged but not committed** — nothing lost, ready whenever Harsh wants the commit
+message.
+
+**Next:** Task 08 — React screens (Desk, Approvals, Quotes), starting fresh next session.
+
+## 2026-08-31 — Task 08: React screens
+
+**Done:** The three screens exist and build. Desk: paste an enquiry, it POSTs to `/api/enquiries`
+then streams `/process` into a live Agent Trace panel; on the approval gate an `ApprovalCard`
+renders below and Approve/Reject streams `/approvals/{id}`. Approvals: lists pending cards, decide
+in place. Quotes: list + detail, detail replays the stored trace beside the quote. `provider_rate_limited`
+swaps the trace for a replay picker backed by three hand-written `AgentEvent[]` fixtures — works with
+the API stopped. Hash routing (`#/desk/:id`, `#/quotes/:id`) survives refresh. `tsc -b`, `npm run lint`
+(oxlint), `npm run build` all clean; `dotnet build -warnaserror` clean; 118 unit tests pass.
+
+**Files that matter:** `src/QuoteDesk.Web/src/hooks/useAgentStream.ts` (the only SSE reader — fetch +
+ReadableStream), `src/components/TracePanel.tsx` and `ApprovalCard.tsx` (the two bespoke pieces),
+`src/api/types.ts` (TS mirrors of the C# records), `src/api/traceLabels.ts` (tool-name → human label).
+
+**Decisions made:** Designed the 7 artboards in Claude Design first, then transcribed — canvas at
+https://claude.ai/code/artifact/e9d0ad5e-3227-4514-b1c9-e3347cae2231. No component library
+(hand-rolled ~8 primitives in `components/ui.tsx`); shadcn considered, declined. Trace panel shows
+plain-language labels, never raw tool names — Harsh's call, now in SPEC §8 + CLAUDE.md +
+memory `ui-hides-internal-identifiers`. Approve/reject only, no ambiguous-line dropdown (needs
+`UnresolvedLine.Candidates[]` server-side — deferred shape written into SPEC §8).
+
+**Tests:** After Docker came up, the full non-eval suite passes — 118 unit + 40 integration
+(`dotnet test --filter "FullyQualifiedName!~Evals"`). Evals were deliberately not run to preserve the
+Gemini free-tier daily quota.
+
+**Known gaps:** No live end-to-end smoke test through the real pipeline yet — SSE parsing and the
+post-refresh approval-id resolution (scans `GET /api/approvals`) are unverified against a running
+API + Gemini; Harsh wants to drive the first full flow himself. Only a `429` triggers the replay
+picker; `budget_exceeded` renders as a plain error. `provider_rate_limited` replay cards have
+Approve/Reject disabled (no real `AgentRun` id). Pre-existing `only-export-components` oxlint warning
+on `AuthContext.tsx` left as-is.
+
+**Blocked on Harsh:** Nothing. Start Docker Desktop next session so the full test suite and a live
+demo run can happen.
+
+**Next:** Task 09 — deploy (Docker, CI, live URL). First get a clean local end-to-end run with Docker
+up to confirm task 08 works against the real API before deploying it.
+
+## 2026-08-31 — Re-engineering the agent layer (retrieval, reliability, ceilings)
+
+**Why:** Task 08's first real run failed. Root cause found by reading the stored trace: `search_catalog`
+returned **342 candidates from a 262-row catalogue** — one tool result was 56 KB, 92% of the run's
+record, re-sent on every turn of the tool loop until the provider gave up. The model's queries were
+good; our retrieval was not.
+
+**Two mechanisms, both confirmed against the real database.** We matched on letters, not whole words,
+so "PU" also matched every "s**pu**r gear" (110 rows) and "ring" matched every "bea**ring**" (88 rows).
+And nothing was ever capped — even a cleanly *resolved* query returned every near-miss.
+
+**Done:**
+- **Desk keeps its state.** A session provider sits above the router, so navigating to Approvals and
+  back no longer destroys the enquiry, trace and error; it also survives a browser refresh via
+  `sessionStorage` (400 KB cap, drops the trace before overflowing). Added **New enquiry**, **Retry**
+  and **Edit & re-run**. Nothing clears except New enquiry or a successful approve. The Desk tab now
+  links back to the run in progress.
+- **Retrieval rewritten as two-stage.** Cheap substring shortlist, then a whole-word re-rank weighted
+  by inverse document frequency, so rare distinguishing words (`PU`, `6203`, `2RS`, `25mm`) outweigh
+  family words (`belt`, `bearing`). Scoring is additive, which fixes the bug where the junk hint word
+  "as" (from "same as last time") dragged a perfect match below the resolve threshold. Absolute **and**
+  relative confidence floors, hard cap of **5 candidates**. Candidate payload slimmed (dropped
+  per-row reason, list price, uom). `get_customer_history` capped at 20 rows.
+- **Output reliability.** New `StructuredModelCall`: provider-enforced JSON schema generated from the
+  C# type (`Llm:UseStructuredOutput`, default true), falling back to the tolerant parser if the
+  provider rejects it, plus **retry-once with the parse error fed back**. Schema mode is deliberately
+  OFF for Resolve — it is the tool-calling stage and a strict response format applies to every turn of
+  the loop. Few-shot examples added to `extract.md` and `resolve.md`, both showing the "I cannot tell"
+  answer being used correctly.
+- **Ceilings.** `BudgetedChatClient` counts tokens per model round-trip instead of after each stage,
+  so the budget is a governor not a post-mortem — and it is now the *only* place tokens are counted.
+  Defensive 8 KB cap on what a tool result writes into the trace.
+- **Visibility.** All model calls go through logging middleware; the pipeline logs the full exception
+  on failure and maps provider context-limit errors to `budget_exceeded` instead of a bare `internal`.
+
+**Files that matter:** `src/QuoteDesk.Agents/Tools/CatalogTools.cs` (the ranker),
+`Pipeline/StructuredModelCall.cs`, `Pipeline/BudgetedChatClient.cs`,
+`src/QuoteDesk.Web/src/desk/DeskSessionContext.tsx`.
+
+**Verified:** 171 tests green (123 unit + 48 integration), up from 158. Against the **real seeded
+database**: the worked example's three lines now come back `ambiguous` (6203 — needs the suffix),
+`resolved` → `BELT-PU-25MM` (not the rubber belt), `ambiguous` (spindle tape thickness), with no
+result exceeding 5 candidates. Six fully-specified seeded phrasings — including Hinglish
+("6210 ZZ bearing ka rate bhejo") — resolve to the exact expected SKU. A new test proves a model reply
+of prose instead of JSON is now retried rather than fatal.
+
+**Decisions:** Chose two-stage retrieval + rarity ranking + schema exposure in the prompt, researched
+against how Google AI Mode (query fan-out, rank, synthesise) and Elastic/Anthropic tool-design guidance
+actually work. Deliberately NOT used: vector search (our discriminators are exact tokens like 6mm vs
+8mm, which embeddings blur), Lucene (a search engine for 262 rows), SQL full-text (needs container and
+Azure config plus raw SQL for the rank). Hand-rolled ~40 lines instead — the right call at this size,
+and Harsh chose it explicitly on portfolio grounds. Self-querying structured filters were deferred
+pending measurement; the ranker alone proved sufficient.
+
+**Known gaps:** No live model run yet — whether `gemini-3.6-flash` honours schema-enforced output is
+still unverified, and the first live run will log a warning and fall back if it does not. Response
+caching and conversation trimming (`UseDistributedCache`, `UseChatReducer`) considered and skipped.
+The project's own SPEC/DOMAIN/task docs are now out of step with the code and need a rewrite pass.
+
+**Blocked on Harsh:** The one live end-to-end run — he asked to drive it himself and to keep the
+Gemini free-tier daily allowance for it.
+
+**Next:** Live run of the worked example through the UI. Then re-test `gemini-3.5-flash-lite` (500/day
+vs 20/day): the earlier "poor judgement" verdict is unsafe, because that model was judged while being
+handed 342 candidates. If it now works, the quota problem disappears entirely.
+
+## 2026-08-31 — Doc reconciliation + tasks 09–11 re-scope (no product code)
+
+**Why:** the agent-layer rework left the project's own documents describing a system that no longer
+exists, and tasks 09–11 predated it. Harsh will read the whole codebase against `docs/SPEC.md` in a
+review pass after task 09, so SPEC has to be true first.
+
+**Done — docs now match the code:**
+- `docs/SPEC.md` §4 — "structured output deliberately not used" replaced with what is actually there
+  (`StructuredModelCall`: schema mode for Extract/Narrate, tolerant-parser fallback, retry-once-with-
+  the-error; Resolve stays plain-text). New `Llm:UseStructuredOutput` key. Per-stage model routing
+  noted as task 09's.
+- §7 — the two-stage `search_catalog` ranker written up (whole-word + IDF, additive scoring, 5-cap,
+  slim `CatalogCandidate`), `get_customer_history` 20-row cap, the 8 KB trace cap.
+- §8 — `BudgetedChatClient` (token budget is a governor now), `budget_exceeded` for provider
+  context-limit errors, full-exception logging. Recorded that the frontend still only special-cases
+  `429`.
+- `docs/DOMAIN.md` — worked example step 3 corrected (6203 has four suffix variants, not two).
+- `CLAUDE.md` — added the "Desk keeps its state" rule.
+- `ChatClientFactory.cs` — one-line comment fix (cited a `GoogleGenAiSpike.cs` that never existed).
+- Amendment blocks appended to `tasks/task-06/07/08` Notes on completion.
+
+**Done — task files re-scoped:**
+- **task 09** gains: model routing (Extract/Narrate on `gemini-3.5-flash-lite` 500/day, Resolve on
+  `3.6-flash` 20/day) + per-run provider fallback, no user selector; sign-in screen polish; OAuth
+  origin for the prod URL; the still-unbuilt rate limiter.
+- **task 11** "Expanded" section: OpenTelemetry is entirely green-field; per-stage token/duration
+  needs server-side emission; the eval "golden set" doesn't exist (3 files, same enquiry); no
+  prompt-injection behavioural test; ADR-0002 reasoning is ready to write.
+- **tasks/README.md** — added an "agent-layer rework (done)" row and a "code review + security
+  review + codebase walkthrough" milestone between 09 and 10, where the audit's small correctness
+  bugs (streaming-401 hole, deep-link-404 infinite load, swallowed Google `onError`) belong.
+
+**Verified:** no stale phrases left in docs (`deliberately not used`, `GoogleGenAiSpike`, `matches
+two SKUs` all gone); `dotnet build -warnaserror` clean; 171 tests green; `npm run build` clean.
+
+**Blocked on Harsh:** still the one live end-to-end run (his to drive), which also settles whether
+`gemini-3.6-flash` honours schema-enforced output.
+
+**Next:** Task 09 — deploy. First a clean local live run of the worked example to confirm the
+agent-layer rework works against the real API + model before it goes public.
+
+**Git state at session end:** two commits on `development` — `f131fcc` (agent-layer rework) and
+`b059337` (doc reconciliation). `development` fast-forward-merged into `main`; both branches now at
+`b059337`. **Neither branch is pushed** — `origin/main` is at `3ba6b67`, `origin/development` at
+`a7fb4f3`. Push is Harsh's to run. Build clean, 171 tests green, working tree clean.
+
+## 2026-08-31 — First live run of the reworked pipeline (partial success)
+
+**What ran:** two attempts against the real `gemini-3.6-flash`.
+
+- **Enquiry #2004 (real):** Extract → Resolve (`resolve_customer`, `search_catalog`,
+  `get_customer_history`, `check_stock`) → Price all **succeeded**. The 6th and final model call —
+  Price's Narrate step — got `429`d: `GenerateRequestsPerMinutePerProjectPerModel-FreeTier`,
+  `limit: 5`, "retry in 50s". Mapped correctly to `provider_rate_limited`; the replay panel showed,
+  the enquiry text and trace were kept, navigating away and back preserved everything.
+- **Enquiry #2005:** this was the **replayed fixture**, not a live run (Harsh clicked "Replay this
+  run"). Reproduced the worked example faithfully — correct SKUs, the spindle-tape line unresolved,
+  the belt date conflict, totals matching docs/DOMAIN.md. Approve/Reject correctly disabled (a
+  replay has no `AgentRun` to POST to; the card says so).
+
+**Confirmed working against the real model:**
+- Schema-enforced JSON output on `gemini-3.6-flash` — Extract ran clean, no fallback warning.
+- The two-stage retrieval fix — `search_catalog` did ~15 sub-millisecond `LIKE` queries then ranked
+  in memory. No candidate flood. The pipeline sailed through Resolve.
+- `get_customer_history` 20-row cap — visible in the SQL as `SELECT TOP(@p) … ORDER BY OrderedAt DESC`.
+- `BudgetedChatClient`, the `provider_rate_limited` mapping, and the Desk state persistence.
+
+**The blocker is the per-minute limit, not the daily one.** `gemini-3.6-flash` free tier is
+**5 requests/minute**. One pipeline run makes ~6 sequential model calls (1 Extract + ~4 Resolve +
+1 Narrate) in ~40 s, and they bunch. Extract alone took ~13 s on the first attempt (thinking-model
+overhead), ~40 s total.
+
+**"Replay this run" is a canned fixture, not a resume.** A failed run cannot be continued from where
+it stopped — there is no checkpoint-resume for a mid-pipeline failure, only re-run from Extract.
+
+**Next session — do these first, in order:**
+1. **Model routing (~35 lines).** Try the simplest thing first: move **all three stages to
+   `gemini-3.5-flash-lite`** (500/day, higher RPM, no thinking lag) and re-test. The earlier "poor
+   judgement" verdict on the Lite models was reached while they were being handed 342 candidates —
+   likely stale now. If Resolve holds on Lite, the quota/RPM problem is gone. If not, per-stage:
+   Extract + Narrate on Lite, Resolve on `gemini-3.6-flash`. Shape: optional per-stage model
+   overrides on `LlmOptions`, `ChatClientFactory` builds one client per distinct model, the pipeline
+   picks per agent.
+2. **Then the code review + security review + codebase walkthrough** — moved to **before task 09**
+   (was: between 09 and 10). Rationale: understand the system before it goes public and before task
+   10 adds channels; a security review belongs before the URL is live. The deploy-config half of the
+   security review (Dockerfile, CI, secrets, CORS, public rate limiter) folds into task 09 itself.
+   `tasks/README.md`'s milestone row needs moving to match.
+3. Then task 09 (deploy), then task 10 (channels).
+
+**Git:** unchanged from the entry above — `main` = `development` = `57e5842`, neither pushed.
+
+## 2026-09-01 — Task 09a: deployable (model routing, rate limiting, container, CI)
+
+**Done:** Extract/Narrate on `gemini-3.5-flash-lite`, Resolve on `gemini-3.6-flash`
+(`ChatClientRegistry` — two independent RPM buckets, the real fix for 08-31's run-ending 429). Rate
+limiting live (`GlobalLimiter` on every route by default, `auth`/`pipeline` stacked stricter on the
+two routes that need them). Sign-in screen rebuilt; a 5-sample enquiry picker replaced the bare
+worked-example link, each verified against the live seeded DB. `Dockerfile` + compose `api` service —
+built, runs as uid 1654, migrates+seeds+answers health checks, verified live. CI workflow written
+(build Debug+Release → test → image). 177 tests green, `npm run build`/`lint` clean.
+
+**Files that matter:** `ChatClientRegistry.cs`, `src/QuoteDesk.Api/RateLimiting/`, `Dockerfile`,
+`tasks/task-09a-deployable.md`.
+
+**Decisions made:** Task 09 split into 09a/09b. Deploy first, review after — reverses the prior
+entry's plan, Harsh's explicit call. `/approvals/{id}` carries no rate-limit policy — `ApproveExecutor`
+makes no model call. Compose's `api` binds host port 5080 (8080 is Vite's).
+
+**Known gaps:** `dotnet build` (Debug) never triggers CA1848; only `dotnet publish -c Release` does,
+and nothing had published Release before this task's Dockerfile — fixed (3 sites), and CLAUDE.md's
+Commands now list Release too. `global.json` pins 10.0.400; the Docker base image floats on `10.0` —
+accepted trade-off.
+
+**Blocked on Harsh:** one live worked-example run through `docker compose up -d` (needs his Google
+sign-in and his Gemini quota) and a pushed branch to confirm CI actually goes green.
+
+**Update, same session:** Harsh created `.env` himself (my own Write to that path is hard-blocked at
+two independent layers — a settings.json deny rule, and the auto-mode classifier refusing even to
+edit that rule — both correctly held). With it in place, `docker compose up -d --build` was run for
+real: `sql` healthy, `api` built and started, migrated, seeded, uid 1654, both health checks 200. The
+compose path is now genuinely verified, not just `docker run` against the same network. Only the
+Google-sign-in-gated run and the CI push remain, both still his.
+
+**Harsh drove the first genuinely live run** — enquiry #3003 through the containerised API, real Google
+sign-in, real Gemini calls. **52.68s total** (server-measured): Extract 1.69s, Resolve 49.59s (~13.7s
+thinking before the first tool call, ~35.8s on the second turn), Narrate ~1.4s. No 429 — the
+model-routing fix holds under a real run. Approve → quote: 330ms, no model call.
+
+**Three real bugs found and fixed from that one run, all with tests, all live in the rebuilt
+container:**
+- Narration said "$58,179.90" — every number is ₹, but `narrate.md` never named a currency.
+  One-line prompt fix.
+- Approval card showed "0.03%" instead of "3%" — `QuoteDesk.Domain` represents discounts as a
+  fraction (`MaxCombinedDiscountPct = 0.15m`), but `ApprovalCard.tsx`/`QuoteDetailScreen.tsx` both
+  rendered the raw fraction with `%` appended. Invisible until now because the hand-written replay
+  fixtures used the opposite convention (`discountPct: 7` meaning 7%), so the component looked
+  correct against fixtures and wrong against the real backend the whole time. Added `percent()` to
+  `lib/format.ts`, fixed both call sites, fixed the three fixtures to the real convention.
+- Quotes list showed a correctly-resolved customer as "Unverified sender" — `Enquiries.CustomerId` is
+  set `null` at intake (Paste never knows the customer) and **nothing in the codebase ever wrote
+  Resolve's answer back onto it** — `IEnquiryRepository` had no update method at all. Fixed:
+  `UpdateCustomerAsync`, called from `QuoteWriteTools.CreateQuoteDraftAsync` once a human approves,
+  only filling in a `null`, never overwriting a known customer. New regression test uses a freshly
+  created enquiry, not the seeded `ShreejiEnquiryId` — that already carries a customer and would hide
+  this exact regression.
+
+178 tests green (up from 177), Debug+Release build clean, `npm run build`/`lint` clean, container
+rebuilt via `docker compose up -d --build` with the fixes and confirmed healthy.
+
+**Next:** those two verifications, then task 09b (`az` CLI not installed yet — his first step), then
+the code/security review, then task 10.
+
+## 2026-09-01 (cont.) — Four more fixes from live testing, session cut short by context limit
+
+**In progress — plan file at `C:\Users\Lazy Boy\.claude\plans\ohk-lets-start-task-typed-otter.md`
+has the full design for all four; re-read it first.** Harsh drove more live runs after the three bug
+fixes above and found four more things:
+
+1. **Token usage always reported `{0,0}`** — root cause confirmed by reading the code: `DoneEvent`
+   can only be built after `Approve` runs (a separate HTTP request from Extract/Resolve/Price), and
+   each of `StartAsync`/`ResumeAsync` builds its own independent `TokenUsageTracker` — the one that
+   saw real usage is garbage by the time the real `DoneEvent` fires from the zero-spend Approve leg.
+   **DONE, backend-complete, build clean:** new migration `AddAgentRunTokenUsage` (`AgentRuns` gains
+   `PromptTokens bigint NULL`, `CompletionTokens bigint NULL`); `AgentRunRecord`,
+   `IAgentRunRepository.UpdateStatusAsync` (now takes `promptTokens`/`completionTokens`),
+   `AgentRunRepository.ToRecord`, `TokenUsageTracker`'s constructor (optional seed params),
+   `EnquiryPipeline.cs` (every `UpdateStatusAsync` call site passes the tracker's running total;
+   `ResumeAsync` seeds its tracker from the persisted total instead of zero) — all edited. Test
+   `ResumeAsync_Approved_ReportsCumulativeTokenUsageAcrossBothLegs` added to
+   `EnquiryPipelineTests.cs`. **Not yet run** — `dotnet build` is clean but `dotnet test` was not
+   executed before the session ended; run it first thing next session.
+
+2. **A failed run couldn't resume past Resolve**, even though the framework checkpoints after every
+   stage (confirmed live: the failed enquiry's one checkpoint sat unused right after Extract).
+   **DONE, backend-complete, build clean:** `EnquiryPipeline.ProcessAsync` (new — what
+   `EnquiryEndpoints.cs`'s `/process` now calls instead of `StartAsync` directly),
+   `FindResumableFailedRunAsync` (eligible only when the last `StageEvent` before a `Failed` status
+   is `"resolve"`), `ResumeFailedAsync` (reuses the *same* `AgentRun` row — resuming a checkpoint
+   keeps its original `SessionId`, which has a unique index, so a new row is impossible). Two tests
+   added: `ProcessAsync_WhenPriceFailedAfterResolveSucceeded_ResumesPastResolveInsteadOfRestarting`
+   and `ProcessAsync_WhenResolveItselfFailed_StartsFreshRatherThanResuming`. **Not yet run** — same
+   as above, build clean, tests not executed.
+
+3. **Quotes list didn't show item names** — Harsh wanted "6210 ZZ bearing, 40mm cogged v belt, ..."
+   visible, not just customer/total. **DONE.** `QuoteRepository.ListAsync` now `.Include(q => q.Lines)`
+   (was missing entirely) plus one batched `CatalogItems` name lookup for every distinct SKU across
+   the page (avoids N+1); `QuoteSummaryRecord`/`QuoteSummaryResponse`/TS `QuoteSummaryResponse` all
+   gained `ItemNames`/`itemNames`; `QuotesScreen.tsx` has a new truncating "Items" column.
+   `FakeQuoteRepository` (unit tests) updated to the new record shape too.
+
+4. **Trace panel showed per-stage duration but no run total — DONE, both halves.** `agentEvents.ts`'s
+   `done` variant gained `at?: string | null` (closes the C#/TS mismatch). `TracePanel.tsx`'s
+   `buildTrace` now computes total run duration (first `StageEvent.at` → `DoneEvent.at`) and renders
+   it on the same row as the token counts: `"done · 52.68s · N in · M out"`.
+
+**All four fixes verified this pass:** a real bug was found and fixed along the way — the eligibility
+check in fix 2 tested `lastStage == "resolve"`, but `ResolveExecutor` emits its `StageEvent` the
+moment Resolve *starts*, not completes, so that check couldn't actually distinguish "Resolve failed"
+from "Price failed after Resolve succeeded" (both show `"resolve"` last in the wrong case, or missed
+the right one). Fixed to check for `"price"` instead — only reachable once Resolve has genuinely
+finished. Also found: `EnquiryPipeline` itself never writes `AgentRuns.TraceJson` — only the API
+layer's `AgentEventStreamWriter` does, after a real HTTP request — so the two new fix-2 tests (which
+call the pipeline directly) have to persist the trace themselves via `AppendTraceAsync` between the
+two `ProcessAsync` calls, exactly mimicking what production does. **181 tests green** (129 unit + 52
+integration, up from 178), Debug+Release build clean, `npm run build`/`lint` clean.
+
+**Also fixed:** the pre-existing quote `QTN-2026-0001` (enquiry #3003) was created before today's
+`CustomerId` fix landed in the container, so it still showed "Unverified sender" — backfilled by hand
+(`UPDATE Enquiries SET CustomerId = 6 WHERE Id = 3003`), not by any code change; the fix itself only
+needed to be correct going forward.
+
+**Docker Desktop needed a restart mid-session** — its containers and image cache were wiped
+(`docker ps -a` came back completely empty, base image pulls then failed with `EOF` even though the
+host itself could reach `mcr.microsoft.com` fine) — its internal WSL2 networking was in a bad state
+after whatever caused the reset. Restarting the Docker Desktop process fixed it. If this recurs, that
+is the fix — not a real infrastructure change.
+
+**Blocked on Harsh:** nothing new. No live Gemini call was needed for any of today's four fixes — all
+provable via the stub, and all now proven.
+
+**Docs closed out, session ending here (Harsh's own weekly usage is nearly exhausted).**
+`docs/SPEC.md` updated: §6's `AgentRuns` schema row and §8's `AgentEvent` union both now show
+`PromptTokens`/`CompletionTokens`/`DoneEvent.At`, and a "Resolved 2026-09-01" block covers all four
+fixes with the same detail as this log. `tasks/task-09a-deployable.md`'s "one live run" acceptance
+criterion is now correctly checked off (Harsh did it, enquiry #3003) — only "CI green on a pushed
+branch" remains open, and that needs an actual push.
+
+**Task 10/11 order reversed, Harsh's call:** `tasks/README.md` now lists 11 (observability, evals,
+README) before 10 (email/WhatsApp channels) — the eval suite and README are the actual portfolio
+differentiators and don't need channels to exist first; channels are being saved for last on purpose.
+Task numbers and file names are unchanged, only the execution order; neither task depends on the
+other, so nothing about the swap is unsafe.
+
+**Session ends here, deliberately, before starting new work.** Harsh will test today's four fixes
+himself in the browser (the container is up and rebuilt with all of them), then push and merge
+`development` into `main` himself, per the standing rule that commits and pushes are his to run.
+
+**Next session, in order:** 1) confirm the push went through and CI is green (task 09a's last item);
+2) task 11 (observability, evals, README) — the eval golden set doesn't exist yet beyond the worked
+example, this is genuinely green-field work per the "Expanded 2026-08-31" section of
+`tasks/task-11-observability-docs.md`; 3) task 09b (Azure) whenever Harsh wants the live URL — `az`
+CLI still isn't installed on this machine; 4) task 10 (channels) last, as just decided.
+
+**Git state:** nothing committed or pushed this session (per standing rule) — everything from today
+(three bug fixes + four fixes + the 09a work before that) is staged on `development`, ready for Harsh
+to review and push himself.
+
+## 2026-09-01 (cont.) — Harsh tested live, found and fixed two more real gaps, then shipped
+
+Harsh tested today's fixes in the browser himself and found two more real things: item names were
+missing from the quote **detail** page (only the list had been fixed — `QuoteRepository.GetByIdAsync`
+now does the same batched `CatalogItems` lookup `ListAsync` does, `QuoteLineRecord`/`QuoteLineResponse`
+gained `ItemName`, shown above the SKU on the detail table); and the approval card's "Approve & send"
+button is never disabled by unresolved lines — confirmed in code, not assumed, and traced to a real
+semantic drift from `docs/DOMAIN.md`'s original worked example (which has the salesperson *resolve*
+the ambiguity before approving) once task 08 deferred the resolve-inline UI. **Deliberately left
+unfixed** — Harsh's call, "forget it for now" — worth revisiting: hard-disable vs. a distinct
+"send partial quote" affordance are the two real options, written up for whenever he wants it.
+
+**Six edge-case enquiries were designed and verified against the live database** for Harsh to try
+(not_found item, real non-Local freight, a false "same as last time" claim with no supporting order
+history, and a prompt-injection test) — none run yet, his to try next.
+
+**Shipped.** All 181 tests green, Debug+Release build clean, `npm run build`/`lint` clean, one
+commit (`10f7d1b`) on `development`, fast-forwarded into `main`, both pushed to `origin`. **CI ran on
+the push and passed** — the first real confirmation `.github/workflows/ci.yml` actually works, not
+just that it's well-formed YAML.
+
+**Task 09a is now fully done** except nothing else — the "CI green on a push" acceptance criterion is
+satisfied. `docs/SPEC.md`, `tasks/README.md` (11 before 10) and `tasks/task-09a-deployable.md` are all
+reconciled with the final state.
+
+**Next session:** a new task, starting fresh. In order per the reordering above: task 11
+(observability, evals, README — green-field), then task 09b (Azure, `az` CLI needs installing first),
+then task 10 (channels) last. The two left-open items (detail-page item names — done — and the
+approve-button/unresolved-lines question — deliberately deferred) are the only loose threads; neither
+blocks anything.
+
+## 2026-09-02 — Task 09b planning only (session cut short, nothing built)
+
+**Nothing was created, changed or staged this session.** Working tree is clean at `38a4708` on
+`development`. This entry exists so the next session can resume planning without re-deriving anything.
+
+**Where we got to:** task 09b (deploy to Azure) was explored and four decisions were taken with Harsh
+before the session was stopped. No Azure resource exists, no CD workflow was written, no file was
+touched.
+
+**Harsh's four decisions (settled — do not re-ask):**
+
+1. **Azure account:** he already has a subscription; `az login` is available to him.
+2. **Registry: GHCR, public package** (`ghcr.io/harsh2292/quotedesk-api`), pushed from the CD workflow
+   with the built-in `GITHUB_TOKEN`. Chosen over ACR Basic specifically because ACR is the only
+   line item in this whole deploy that isn't free (~$5/month). Container Apps pulls a *public* GHCR
+   image with **no registry credentials at all**, so it also removes a secret.
+3. **Region: Central India** — lowest latency from Surat. To be verified at execution time that the
+   SQL free offer and Container Apps both exist there; Southeast Asia is the agreed fallback.
+4. **Cold start: accept it, be honest, and warm early.** Measure the real number, write it into
+   `SignInScreen.tsx`'s placeholder copy (currently the words "a few seconds", lines 67-70), *and*
+   have the sign-in screen fire a fire-and-forget `/health/ready` on mount so Azure SQL starts
+   resuming while the visitor reads the card and clicks Google. A keep-warm cron ping was considered
+   and **rejected with a reason**: keeping SQL awake burns the 100,000 vCore-second monthly grant in
+   roughly two days, after which the database auto-pauses for the rest of the month and the demo is
+   dead.
+
+**HARD CONSTRAINT, stated by Harsh mid-session and overriding the task file where they conflict:**
+**₹0. He must not be charged, even though a credit card is attached, and his 12-month Azure free-account
+period is already over.** Everything below was verified against Microsoft's own docs against exactly
+that constraint:
+
+| Piece | Free? | The guard that makes it ₹0 |
+|---|---|---|
+| Azure SQL | **Free forever, not a trial perk** — 100,000 vCore-seconds + 32 GB data + 32 GB backup per database per month, reset on the 1st, up to 10 databases per subscription, no time limit | Create with `--use-free-limit --free-limit-exhaustion-behavior AutoPause`. On exhaustion the database simply becomes inaccessible until the next calendar month at **no charge**. The irreversible choice is opting *into* billing ("Continue using database with additional charges"), which we never do — and once taken it cannot be reverted. |
+| Container Apps | 180,000 vCPU-seconds + 360,000 GiB-seconds + 2,000,000 requests per subscription per month, always-free, Consumption plan | Consumption-only environment; `min-replicas 0` so an idle app costs literally nothing; `max-replicas 1` so a traffic spike cannot scale into charges. |
+| Static Web Apps | Free SKU, no expiry | Do not pick Standard. |
+| **Log Analytics** | 5 GB/month ingestion free | **The one real leak.** A Container Apps environment provisions a Log Analytics workspace by default and it bills past 5 GB. Cap it with a daily quota (or `--logs-destination none`, at the cost of losing live logs) so it physically cannot exceed the grant. |
+
+The ended free-trial period does not affect any of the above — these are always-free recurring monthly
+grants, not 12-month new-account offers.
+
+**Also established by exploration (saves re-doing it):**
+
+- **`az` CLI is still not installed.** An attempt to install it via
+  `winget install -e --id Microsoft.AzureCLI` was started and cancelled when the session was stopped.
+  This is the first blocker next session.
+- **No infra assets exist anywhere in the repo** — no `staticwebapp.config.json`, no bicep/ARM, no
+  `infra/`, no CD workflow. `.github/workflows/ci.yml` is the only workflow and its `image` job builds
+  but never pushes.
+- The container listens on **8080** via `ENV ASPNETCORE_HTTP_PORTS=8080`, runs as `USER app`
+  (uid 1654), and never calls `UseHttpsRedirection` — correct for Container Apps ingress terminating
+  TLS.
+- `Program.cs` **fails fast** on an empty `Auth:Google:ClientId`, a `Auth:Jwt:SigningKey` under 32
+  bytes, and an empty `Llm:ApiKey`. Note `GetConnectionString("QuoteDesk")` returns `""` rather than
+  null for the appsettings default, so a missing connection string does **not** trip its throw — it
+  fails later at SQL connect.
+- **`SeedOnStartup` is nested inside `MigrateOnStartup`** in `Program.cs` — setting
+  `Database__SeedOnStartup=true` alone does nothing; both must be true.
+- **`/health/live` runs no checks** (`Predicate = _ => false`) and `/health/ready` runs the SQL check.
+  Both anonymous, both exempt from the rate limiter. The Container App liveness probe must use
+  `/health/live` only, exactly as the task file says.
+- **A real startup risk to design for:** migration runs *before* `app.Run()`, so the container is not
+  listening until `MigrateAsync()` finishes. On a cold start against an auto-paused Azure SQL that
+  wait includes the database resume. The startup probe needs a generous
+  `failureThreshold × periodSeconds` (~300s) or Container Apps will kill the replica while it is
+  legitimately waiting. `EnableRetryOnFailure()` is already on the EF Core provider.
+- **A circular ordering dependency between the two hosts:** `VITE_API_BASE_URL` needs the Container
+  App FQDN, and `Auth__AllowedOrigins__0` needs the Static Web Apps URL. Resolve by creating the
+  Container App first, then the SWA, then updating the Container App's `AllowedOrigins`.
+- SWA needs a `staticwebapp.config.json` with a `navigationFallback` rewrite to `/index.html`, or
+  every deep link (`/approvals`, `/quotes`) 404s.
+- CORS is already built (task 07) and is inert until `Auth:AllowedOrigins` is non-empty.
+  `AgentEventStreamWriter` already sets `X-Accel-Buffering: no`, which is why the task file insists on
+  direct cross-origin calls to the Container App rather than an SWA proxy route.
+
+**Next session, in order:** 1) install `az` and `az login` (Harsh's, or retry the winget install);
+2) verify Central India hosts both the SQL free offer and Container Apps; 3) provision in the order
+Container App → SWA → back-fill `AllowedOrigins`; 4) write `staticwebapp.config.json` and the CD
+workflow; 5) Harsh adds the SWA origin to the Google OAuth client's authorized JavaScript origins
+(portal click, his); 6) budget alert; 7) measure cold start and write the number into both
+`SignInScreen.tsx` and this log.
+
+**Session stopped by Harsh mid-turn (frozen screen, machine restart needed). Nothing left in a
+half-finished state — there was nothing to finish.**
+
+---
+
+## 2026-09-13 — foundry-00: forked into a new repo for the Agent-a-Thon
+
+**Done:** This repo now exists as an independent fork of `Harsh2292/Quote-Desk@development` (`fb45bdb`),
+for the Microsoft Agent-a-Thon (Level 3). `.git` history removed and not yet re-initialised.
+`.gitignore`, both `UserSecretsId`s, `CLAUDE.md`, `README.md`, `tasks/README.md`, and
+`docs/FOUNDRY-PLAN.md` are updated for this fork. `docs/AGENT-A-THON.md` (event research, partly
+superseded — see its own banner) and `.env.local` were copied over by hand.
+
+**Files that matter:** `docs/FOUNDRY-PLAN.md` (the live plan — read this first, every session),
+`tasks/README.md` (the active `foundry-NN` queue plus the inherited history), `CLAUDE.md`'s new
+architecture line (two agents: Intake, Resolve).
+
+**Decisions made:** Two agents split by cognitive role (Intake perceives, Resolve decides) — not the
+earlier Customer/Catalogue split, which broke "same as last time" disambiguation. `.claude/` is
+tracked in this fork (a deliberate deviation from the original plan) so a fresh clone keeps the
+skills and settings this workflow depends on. Full reasoning for every decision: `docs/FOUNDRY-PLAN.md`.
+
+**Known gaps:** No `.git` exists yet (task foundry-01). No user-secrets set — build/test have not run
+in this repo yet. No Foundry resource exists yet (Step 0, Harsh's). Module 6 (orchestration) and
+module 4 (monitoring) course summaries not yet supplied — see the plan's Compliance audit.
+
+**Blocked on Harsh:** Step 0 (create the Foundry resource, three model deployments, connect App
+Insights, `curl` for quota, `az login`, `gh auth login`) — nothing after `foundry-01` can run live
+until this is done. Also: choose the new database name/connection string, and confirm the Founderz
+upload form's anonymity rule before `foundry-08`.
+
+**Next:** `foundry-01` — `gh auth login`, create the GitHub repo, first commit and push.
+
+---
+
+## 2026-09-13 (cont.) — Step 0 mostly done; git initialized locally; deployment names decided
+
+**Done:** `git init -b main` + `git switch -c development` in this repo (still local — nothing
+committed or pushed; that's Harsh's, whenever he's ready, no deadline pressure before the 17th).
+All 292 files staged and verified clean (no secret files). Foundry resource confirmed to already
+exist (`pharshin29-2918-resource` / project `pharshin29-2918`, `quotedesk-rg`, `westus3`). The
+Foundry API key is stored via `dotnet user-secrets` on `src/QuoteDesk.Api` (shared with
+`QuoteDesk.Evals` via the same `UserSecretsId`) — not in any file. The correct resource endpoint
+(`.../services.ai.azure.com/openai/v1/`, not the project endpoint) was found and live-tested: a real
+`gpt-4o-mini` completion came back with zero deployment needed (Foundry's "instant access"). Full
+detail in `docs/FOUNDRY-PLAN.md`'s Step 0, now rewritten to be current rather than a todo list.
+
+**Decisions made:** Harsh deploys everything in the Foundry portal himself — this is explicitly how
+he wants to learn Foundry hands-on, even for steps Claude could technically automate via `az`
+(confirmed working and authenticated on this machine). Two deployments only, not three:
+**`gpt-5-nano`** for Intake, **`gpt-5-mini`** for Resolve, both Standard/pay-per-token at the lowest
+TPM setting. No separate judge deployment — each target model judges the other's traces, which
+satisfies module 5's "judge differs from the target" rule per evaluation run without a third paid
+deployment. `gpt-4o-mini` was tried for a new deployment and rejected by Azure (retired for new
+deployments in this catalog) — confirms the GPT-5-nano/mini pair is the real choice, not a fallback.
+
+**Known gaps:** The two deployments above are decided but **not yet created** — Harsh is doing this
+next, in the portal. Application Insights not connected. Roles not granted. Budget alert not set.
+None of `foundry-02` onward can run live until the two deployments exist.
+
+**A real incident, worth recording as-is:** the Foundry API key was pasted in plaintext into a chat
+message while getting it into user-secrets. It was stored immediately and never echoed back or
+re-used in visible text, but it should still be **regenerated in the portal** as routine hygiene —
+a secret that appeared in a chat transcript is exposed regardless of what happens to it afterward.
+
+**Blocked on Harsh:** Create the two deployments above; connect Application Insights; grant the two
+roles (Foundry User for himself, Log Analytics Reader for the project's managed identity); regenerate
+the API key; set the budget alert; `gh auth login`, then push whenever convenient (no rush before
+the 17th, but commit locally now regardless of push timing).
+
+**Next:** **Start the next session rooted in this folder (`E:\DevStuff\quotedesk-foundry`), not the
+old project's.** This session has been operating from the old project's directory the whole time,
+which means it's still reading the *old* `CLAUDE.md` as its always-loaded instructions, not this
+fork's corrected one — a fresh session opened here will load the right rules and index the right
+codebase automatically. Once the two deployments exist and their exact names are confirmed, start
+`foundry-01` (repo/push, if not already done) then `foundry-02` (the real provider switch).
