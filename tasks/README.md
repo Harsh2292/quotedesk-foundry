@@ -42,6 +42,7 @@ allows, and shown in the video if built.
 | extra-02 | WhatsApp photo intake (Twilio sandbox + Microsoft Dev Tunnel; reuses foundry-04's image intake). Needs Harsh: Twilio account, sandbox join, dev-tunnel login | todo — no task file yet |
 | extra-03 | Faster Resolve ("middle version": routine lookups in code, in parallel; Resolve keeps the order-history decision) — ~31 s → ~20 s estimated. Decided **not** to build unless time remains; presented in the video/document as a measured alternative either way (`docs/FOUNDRY-PLAN.md` Step 6) | todo — no task file yet |
 | extra-04 | Impact evidence (Harsh, no code): one anonymised real enquiry or one sentence from a real distributor about quoting time; measured cost per quote checked against Azure Cost Management | todo |
+| extra-05 | Workflow version-stamping, so a pipeline-shape change can never strand a pending approval again (expire mismatches cleanly + startup sweep + shape guard test). **Built inside foundry-06 instead if that task changes the workflow shape** — see its task file | todo — conditional |
 
 Email intake: considered and not queued — low value next to WhatsApp for this business; mention as the next channel.
 

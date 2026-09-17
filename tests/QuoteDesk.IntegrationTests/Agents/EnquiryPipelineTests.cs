@@ -377,7 +377,45 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         toolEnds.Count(e => e.Ok).Should().Be(2);
     }
 
-    private EnquiryPipeline BuildPipeline(IChatClient chatClient, int tokenBudget = 20_000, int maxToolCalls = 8)
+    /// <summary>foundry-03 security review: Intake's output is derived from untrusted text and can be
+    /// steered by an injected enquiry, so Resolve must receive the extracted company name and lines
+    /// inside the untrusted-content delimiter, never bare in its prompt.</summary>
+    [Fact]
+    public async Task StartAsync_ResolvePrompt_KeepsIntakesExtractedFieldsInsideTheDelimiter()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var stub = new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id));
+        var pipeline = BuildPipeline(stub);
+
+        await CollectAsync(pipeline.StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        // Turn 0 is Intake; turn 1 is Resolve's first request.
+        var resolvePrompt = string.Join("\n", stub.ReceivedMessages[1].Where(m => m.Role == ChatRole.User).Select(m => m.Text));
+        var companyLine = resolvePrompt.IndexOf("Company name (as extracted):", StringComparison.Ordinal);
+        var firstStart = resolvePrompt.IndexOf(UntrustedContent.Start, StringComparison.Ordinal);
+        var firstEnd = resolvePrompt.IndexOf(UntrustedContent.End, StringComparison.Ordinal);
+
+        companyLine.Should().BeGreaterThan(firstStart).And.BeGreaterThan(-1);
+        companyLine.Should().BeLessThan(firstEnd, "the extracted fields must sit inside the first delimited block");
+    }
+
+    /// <summary>Setting Llm:IntakeMaxToolCalls to 0 is the natural way to switch Intake's tool off. The
+    /// function-invocation loop rejects an iteration cap below 1, so without clamping every run failed
+    /// in Intake with a generic internal error (found in code review, 2026-09-17).</summary>
+    [Fact]
+    public async Task StartAsync_IntakeMaxToolCallsZero_StillReachesApproval()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var stub = new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id));
+        var pipeline = BuildPipeline(stub, intakeMaxToolCalls: 0);
+
+        var events = await CollectAsync(pipeline.StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        events.Should().NotContain(e => e is ErrorEvent);
+        events.Should().ContainSingle(e => e is ApprovalRequiredEvent);
+    }
+
+    private EnquiryPipeline BuildPipeline(IChatClient chatClient, int tokenBudget = 20_000, int maxToolCalls = 8, int intakeMaxToolCalls = 2)
     {
         var timeProvider = new FixedTimeProvider(Now);
         var customerTools = new CustomerTools(fixture.Customers, fixture.OrderHistory);
@@ -386,7 +424,7 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         var pricingTools = new PricingTools(fixture.Customers, fixture.Catalog, fixture.Stock, fixture.PriceRules, timeProvider);
         var readTools = new ReadToolRegistry(customerTools, catalogTools, stockTools, pricingTools);
         var writeTools = new QuoteWriteTools(fixture.Quotes, fixture.Enquiries, timeProvider);
-        var options = new LlmOptions { Endpoint = "https://example.test/", ApiKey = "unused", Model = "stub", MaxToolCalls = maxToolCalls, TokenBudget = tokenBudget };
+        var options = new LlmOptions { Endpoint = "https://example.test/", ApiKey = "unused", Model = "stub", MaxToolCalls = maxToolCalls, IntakeMaxToolCalls = intakeMaxToolCalls, TokenBudget = tokenBudget };
         var checkpointStore = new SqlCheckpointStore(fixture.Checkpoints, timeProvider);
 
         // One shared stub instance for every stage — its ordered turns assume Intake, Resolve and

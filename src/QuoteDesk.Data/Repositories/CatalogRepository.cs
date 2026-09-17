@@ -4,10 +4,25 @@ namespace QuoteDesk.Data.Repositories;
 
 public sealed class CatalogRepository(QuoteDeskDbContext db) : ICatalogRepository
 {
+    private const string LikeEscape = "\\";
+
+    private static string EscapeLike(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal)
+            .Replace("[", "\\[", StringComparison.Ordinal);
+
     public async Task<IReadOnlyList<CatalogItemRecord>> SearchAsync(string query, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(query);
+
+        // The query is model- and customer-influenced text, so LIKE's own wildcards in it are escaped:
+        // a term of "%" or "__" must search for those literal characters, not match every row. The
+        // value was always parameterised (no SQL injection); this is about the pattern language
+        // (foundry-03 security review).
+        var pattern = $"%{EscapeLike(query)}%";
         var items = await db.CatalogItems.AsNoTracking()
-            .Where(c => EF.Functions.Like(c.Sku, $"%{query}%") || EF.Functions.Like(c.Name, $"%{query}%"))
+            .Where(c => EF.Functions.Like(c.Sku, pattern, LikeEscape) || EF.Functions.Like(c.Name, pattern, LikeEscape))
             .OrderBy(c => c.Sku)
             .ToListAsync(cancellationToken);
 

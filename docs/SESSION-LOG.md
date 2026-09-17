@@ -1247,3 +1247,27 @@ runs, before applying it — same bar as above.
 **Blocked on Harsh:** (1) Commit foundry-03. (2) `Llm:UseStructuredOutput`: delete, or schema-enforce Intake's final turn. (3) Delete the leftover worktree branches/folder; consider gitignoring `.claude/worktrees/`. (4) For extra-04 later: a real anonymised enquiry or a distributor's one-line quote. (5) Before foundry-04: one image or several per enquiry.
 
 **Next:** `foundry-04` (image intake), starting with the two `verify_catalogue_term` carry-over fixes. Then 05 → 08 as planned; extras only after.
+
+---
+
+## 2026-09-17 (cont. 2) — Reviews of commit 2e10f06: fixes A–D
+
+**Done:** Ran a code review, the code-simplifier and a security review on commit `2e10f06`. The built-in `/security-review` failed because this repo has no `origin/HEAD`, so a read-only agent did that review, scoped to the commit. Four fixes are staged, not committed:
+- (A) a stale comment in `ResolveExecutor`.
+- (B) `Llm:IntakeMaxToolCalls`/`MaxToolCalls` set to 0 no longer crash every run. The framework's round-trip limit is kept at 1 or more; the tool-call budgets still refuse the calls.
+- (C) Prompt injection. The untrusted-content wrapper now breaks up `<<<`/`>>>` runs, so an enquiry can't close its block early. Resolve's prompt now wraps Intake's extracted company name and lines too. Before, a steered Intake could make Resolve look up another customer's order history via the company-name fallback.
+- (D) The catalogue search escapes LIKE wildcards, so `%` or `__` no longer match every row.
+
+Both builds clean; 153 unit + 61 integration tests green. Live Foundry eval passed in 40s after the prompt change.
+
+**Decisions made:** The review's finding E needs Harsh's decision: approvals saved before the Extract→Intake rename can't be resumed. The framework matches the checkpoint's workflow shape. Checked the local DB: exactly 5 pending runs have the old shape (ids 1004–1007, 2002, all eval/probe runs). The 3 failed runs have no checkpoints and are unaffected.
+
+**Known gaps:** The company-name fallback in customer matching is still a way to reach another customer's data if Intake is steered. The wrapper now makes that much harder, but it's worth an eval case in foundry-07's prompt-injection test.
+
+**Blocked on Harsh:** Commit A–D. Decide E: mark the 5 old-shape runs failed, delete them, or leave them.
+
+**Next:** `foundry-04` (image intake), starting with the `verify_catalogue_term` carry-over fixes.
+
+**Addendum — finding E resolved (Harsh chose option 1):** marked the 5 old-shape pending runs (1004–1007, 2002) `failed` directly in the local DB: status, cleared `ApprovalRequestJson`, bumped `UpdatedAt`. Verified first that none has a stored trace, so `ProcessAsync` can never try to auto-resume them; a retry of those enquiries starts fresh. Local data only; CI and fresh clones seed from scratch and are unaffected. **Standing caution for later tasks:** changing a workflow executor's id, type or edges (e.g. while wiring OpenTelemetry in foundry-06) strands any approval pending at that moment in the same way. Clear or fail pending runs after such a change.
+
+**Addendum — preventing stranded approvals (Harsh approved the recommendation):** plan is workflow version-stamping: a fingerprint of the pipeline shape stored on every run; a mismatch on resume expires the run cleanly; a startup sweep; a guard test for shape changes. It is **conditional in foundry-06**: first check whether its tracing work changes executor ids, types or edges. Build it there only if it does; otherwise it stays as extra-05. Recorded in the foundry-06 task file (new section + acceptance criterion), `tasks/README.md` extras, and `docs/FOUNDRY-PLAN.md` extras.

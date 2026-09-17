@@ -277,6 +277,13 @@ public sealed partial class EnquiryPipeline(
         var intakeMaxToolCalls = Math.Min(options.IntakeMaxToolCalls, options.MaxToolCalls);
         var intakeBudget = new ToolCallBudget(intakeMaxToolCalls, parent: toolBudget);
 
+        // The budgets above are what refuse tool calls, and they handle a limit of 0 correctly. The
+        // function-invocation loop's own iteration cap is a different thing: it counts the first
+        // request too, and Microsoft.Extensions.AI throws for anything below 1 — so a config of 0
+        // ("switch Intake's tool off") would otherwise fail every run. Clamp only that cap.
+        var intakeIterations = Math.Max(1, intakeMaxToolCalls);
+        var resolveIterations = Math.Max(1, options.MaxToolCalls);
+
         // A reduced reasoning effort on Intake and Narrate only, and only when configured
         // (LlmOptions.LightStageReasoningEffort — null sends nothing, so an unverified provider is
         // never handed it). "None" was measured live on 2026-09-15 against gpt-5-mini — wall time
@@ -306,8 +313,8 @@ public sealed partial class EnquiryPipeline(
         var resolveTools = ToolsNamed("resolve_customer", "get_customer_history", "search_catalog", "check_stock");
 
         return new WorkflowNodes(
-            new IntakeExecutor("Intake", intakeClient, intakeModel, intakeTools, prompts.Intake, lightReasoning, intakeMaxToolCalls, intakeBudget, logger),
-            new ResolveExecutor("Resolve", resolveClient, resolveModel, resolveTools, prompts.Resolve, options.MaxToolCalls, toolBudget, catalog, customers, logger),
+            new IntakeExecutor("Intake", intakeClient, intakeModel, intakeTools, prompts.Intake, lightReasoning, intakeIterations, intakeBudget, logger),
+            new ResolveExecutor("Resolve", resolveClient, resolveModel, resolveTools, prompts.Resolve, resolveIterations, toolBudget, catalog, customers, logger),
             new PriceExecutor("Price", pricingTools, narrateAgent, narrateModel),
             new ApproveExecutor("Approve", writeTools, quotes, timeProvider));
     }

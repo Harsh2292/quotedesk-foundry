@@ -23,6 +23,28 @@ public class RepositoryTests(RepositoryFixture fixture)
         twoRs!.Sku.Should().NotBe(zz!.Sku);
     }
 
+    [Theory]
+    [InlineData("%")]
+    [InlineData("__")]
+    [InlineData("[")]
+    [InlineData("[A-Z]")]
+    public async Task Catalog_SearchWithLikeWildcards_MatchesThemLiterallyNotEveryRow(string query)
+    {
+        // No catalogue SKU or name contains these characters, so a literal search finds nothing. Before
+        // escaping, "%" and "__" matched every row (foundry-03 security review).
+        var results = await fixture.Catalog.SearchAsync(query, CancellationToken.None);
+
+        results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Catalog_SearchAfterEscaping_StillFindsOrdinarySubstrings()
+    {
+        var results = await fixture.Catalog.SearchAsync("6203", CancellationToken.None);
+
+        results.Select(r => r.Sku).Should().Contain("BRG-6203-2RS");
+    }
+
     [Fact]
     public async Task Catalog_BearingPricing_MatchesTheWorkedExampleExactly()
     {

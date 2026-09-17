@@ -467,6 +467,9 @@ if built. Tracked in `tasks/README.md`'s Extras table.
    foundry-04's image intake. Real outbound sending stays a non-goal (docs/SPEC.md §9).
 3. **Faster Resolve, middle version** — see Step 6's recorded latency decision.
 4. **Impact evidence** — a real anonymised enquiry or distributor quote; measured cost per quote.
+5. **Workflow version-stamping** — so a change to the pipeline's shape can never strand a pending
+   approval again. **Conditional:** built inside foundry-06 instead, if that task's tracing work changes
+   executor ids/types/edges (see its task file); otherwise it stays here.
 
 Email intake is not queued (low value next to WhatsApp here); name it as the next channel.
 
