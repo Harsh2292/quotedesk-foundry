@@ -10,6 +10,25 @@ A photo of a handwritten enquiry goes in; structured lines come out; Intake's `v
 tool fires on the illegible word. No multipart upload, no blob storage — base64 riding the existing
 JSON POST, deliberately not persisted past the moment it's used.
 
+## Start here: carry-over fixes from the foundry-03 code review
+
+Photos are exactly where an unclear word appears, so fix these first, test-first:
+1. `verify_catalogue_term` rejects misspellings ("tming belt", "spindel tap") — it only accepts exact
+   whole-word matches. Build a catalogue vocabulary (words from SKUs, names, categories, attributes) and,
+   for a word not in it, return the closest vocabulary word within a small edit distance as a suggestion.
+   Still never a SKU, price or cost.
+2. It reports family names ("SpindleTapes") as unknown — recall searches only SKU and name. The vocabulary
+   in (1) covers categories, which fixes this.
+
+**Also check early, before building the UI:** whether `gpt-5-nano` (Intake's model) reads a real
+handwritten list accurately — one live call with the crafted demo photo, line-by-line accuracy, input
+tokens and latency recorded. Correctness outranks speed on this project: if nano misreads quantities,
+bring the numbers to Harsh before changing any model choice.
+
+**Scope (decided 2026-09-17):** one photo per enquiry, as written below. Several photos/messages per
+enquiry and several enquiries at once are designed but deferred to the extras queue (extra-06, extra-07)
+because of the deadline.
+
 ## The constraint that shapes everything
 
 The image arrives on `POST /api/enquiries` but is needed on `POST /api/enquiries/{id}/process`, a

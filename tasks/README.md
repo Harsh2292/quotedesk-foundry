@@ -19,13 +19,15 @@ fork's equivalent of that project's `docs/SPEC.md` — the plan each task file i
 | foundry-02 | [Foundry inference provider](task-foundry-02-provider.md) | done |
 | foundry-03 | [Intake Agent](task-foundry-03-intake-agent.md) | done |
 | foundry-04 | [Image intake](task-foundry-04-image-intake.md) | todo |
+| ~~foundry-04 multi-part~~ | ⏸ **Ignore for now** — [several photos + text → one quote](task-extra-06-multi-part-enquiries.md) (designed, deferred for time; tracked as extra-06) | on hold |
+| ~~foundry-04b~~ | ⏸ **Ignore for now** — [several enquiries at once](task-extra-07-batch-enquiries.md) (designed, deferred for time; tracked as extra-07) | on hold |
 | foundry-05 | [Quotation Policy grounding](task-foundry-05-policy-grounding.md) | todo |
 | foundry-06 | [Observability + agent registration](task-foundry-06-observability-registration.md) | todo |
 | foundry-07 | [Evaluation](task-foundry-07-evaluation.md) | todo |
 | foundry-08 | [Video and document](task-foundry-08-submission.md) | todo |
 
 **Carry-over fixes from the foundry-03 code review — do these at the start of `foundry-04`** (its photo
-intake depends on them): `verify_catalogue_term` (1) cannot recognise a misspelt word ("tming belt",
+intake depends on them; also listed in that task file's "Start here" section): `verify_catalogue_term` (1) cannot recognise a misspelt word ("tming belt",
 "spindel tap") because it only accepts exact whole-word matches — suggest the closest catalogue word
 within a small edit distance instead; (2) reports family names such as "SpindleTapes" as unknown,
 because recall searches only SKU and name. Fix (1) with a catalogue vocabulary and it covers (2).
@@ -39,14 +41,16 @@ allows, and shown in the video if built.
 | # | Extra | Status |
 |---|---|---|
 | extra-01 | [Resolve an unclear line on the approval card](task-extra-01-line-picker.md) — the human picks the item the agent refused to guess, re-priced in code | todo |
-| extra-02 | WhatsApp photo intake (Twilio sandbox + Microsoft Dev Tunnel; reuses foundry-04's image intake). Needs Harsh: Twilio account, sandbox join, dev-tunnel login | todo — no task file yet |
+| extra-02 | WhatsApp photo intake (Twilio sandbox + Microsoft Dev Tunnel; reuses foundry-04's image intake, and extra-06's multi-part design if built — a WhatsApp thread maps onto one multi-part enquiry). Needs Harsh: Twilio account, sandbox join, dev-tunnel login | todo — no task file yet |
 | extra-03 | Faster Resolve ("middle version": routine lookups in code, in parallel; Resolve keeps the order-history decision) — ~31 s → ~20 s estimated. Decided **not** to build unless time remains; presented in the video/document as a measured alternative either way (`docs/FOUNDRY-PLAN.md` Step 6) | todo — no task file yet |
 | extra-04 | Impact evidence (Harsh, no code): one anonymised real enquiry or one sentence from a real distributor about quoting time; measured cost per quote checked against Azure Cost Management | todo |
 | extra-05 | Workflow version-stamping, so a pipeline-shape change can never strand a pending approval again (expire mismatches cleanly + startup sweep + shape guard test). **Built inside foundry-06 instead if that task changes the workflow shape** — see its task file | todo — conditional |
+| extra-06 | [Multi-part enquiries](task-extra-06-multi-part-enquiries.md) — up to 5 photos + 10 text messages (a WhatsApp-style thread) read into one quote; spike handwriting accuracy first | todo |
+| extra-07 | [Several enquiries at once](task-extra-07-batch-enquiries.md) — Desk holds up to 10 drafts, Process all runs them sequentially, one approval card each | todo |
 
 Email intake: considered and not queued — low value next to WhatsApp for this business; mention as the next channel.
 
-Status values: `todo` · `in progress` · `done` · `blocked`. Full context, the schedule, the cut list
+Status values: `todo` · `in progress` · `done` · `blocked` · `on hold` (planned but deliberately paused — ignore until un-paused). Full context, the schedule, the cut list
 and the compliance audit against the course materials: `docs/FOUNDRY-PLAN.md`.
 
 **Step 0 of the plan (the Azure portal work — Foundry resource, model deployments, App Insights,

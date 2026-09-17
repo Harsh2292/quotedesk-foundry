@@ -281,6 +281,23 @@ The base64-over-JSON design:
    keeps the original contents.
 7. Web: downscale on a canvas to ~1280px JPEG, and **don't** save the image to sessionStorage.
 
+#### ⏸ IGNORE FOR NOW — multi-part and batch enquiries (designed 2026-09-17, deferred for time)
+
+> Harsh asked for this, then paused it because of the deadline. **Not part of the current work** —
+> foundry-04 above stays one photo per enquiry. Kept here, not removed, so the design isn't lost. Full
+> task specs: `tasks/task-extra-06-multi-part-enquiries.md` and `tasks/task-extra-07-batch-enquiries.md`.
+
+- **One enquiry, many parts:** up to 5 photos and 10 text messages (a WhatsApp-style thread) read
+  together into **one** quotation. Parts stored in order in an `EnquiryAttachments` child table (text
+  parts joined into `RawBody`). Image bytes never enter a workflow message — `IntakeExecutor` loads them
+  by enquiry id and sends one `ChatMessage` with the wrapped text plus one `DataContent` per image, in a
+  single call so later messages can amend earlier ones. Only Intake sees images; Resolve's latency is
+  unaffected. Spike first: does Intake's model read multi-page handwriting accurately?
+- **Several enquiries at once:** the Desk holds up to 10 drafts; **Process all** runs them sequentially
+  through the existing endpoints, one approval card each; one failure doesn't stop the batch.
+- Estimated effect when built: Intake roughly +2–5 s for a multi-photo enquiry (to be measured); batch of
+  5 ≈ 5 × one run, with cards landing as each finishes.
+
 ### 4d. Quotation Policy grounding
 
 - `Prompts/quotation-policy.md` — the real rules from `docs/DOMAIN.md` (slab ladder, tier discounts, 15%
@@ -470,6 +487,15 @@ if built. Tracked in `tasks/README.md`'s Extras table.
 5. **Workflow version-stamping** — so a change to the pipeline's shape can never strand a pending
    approval again. **Conditional:** built inside foundry-06 instead, if that task's tracing work changes
    executor ids/types/edges (see its task file); otherwise it stays here.
+6. **Multi-part enquiries** — up to 5 photos and 10 text messages read together into one quote; parts in an
+   `EnquiryAttachments` child table; image bytes never in checkpoints (Intake loads them by id); all parts
+   in one Intake call so later messages can amend earlier ones. Spike handwriting accuracy on Intake's
+   model first (`tasks/task-extra-06-multi-part-enquiries.md`).
+7. **Several enquiries at once** — Desk batch of up to 10 drafts, processed sequentially through the
+   existing endpoints, one approval card each (`tasks/task-extra-07-batch-enquiries.md`).
+
+Extras 6–7 were designed on 2026-09-17 after Harsh asked for multi-photo and batch support, then deferred
+by him because of the deadline: foundry-04 stays one photo per enquiry.
 
 Email intake is not queued (low value next to WhatsApp here); name it as the next channel.
 
