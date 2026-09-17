@@ -237,7 +237,7 @@ Rules: take whatever versions NuGet resolves and record them in `docs/SPEC.md` �
   full worked example live, with real multi-turn tool calls. If a strict-schema rejection warning
   appears, set `Llm:UseStructuredOutput: false`.
 
-### 4b. Intake Agent (replaces Extract)
+### 4b. Intake Agent (replaces Extract) — ✅ done 2026-09-17 (foundry-03)
 
 - **New tool** in `src/QuoteDesk.Agents/Tools/CatalogTools.cs`:
   `VerifyCatalogueTermAsync(string term)` → `CatalogueTermCheck { Term, Known, Families[], ExampleNames[≤3] }`.
@@ -394,6 +394,20 @@ Run one enquiry, wait 2–5 minutes, then open each agent's **Traces** tab. **Ta
   "I won't guess" call.
 - **Latency, before recording.** The last live run spent 49.6 s in Resolve. Pick faster deployments or
   trim tool results, and cut dead air in the edit.
+  - **Decided 2026-09-17 — keep the architecture as it is; present the faster alternative as a
+    considered design, don't build it.** Measured on Foundry (3 live runs of the worked example): 31 s
+    average end to end, Resolve 25 s of that (~80%), 4.3 model round trips and 3.7 tool calls per run,
+    the final judgement turn alone ~10–11 s; both judgement calls correct 3/3. The alternative
+    considered: move the *routine* lookups (customer match by email domain, catalogue search for every
+    extracted line) into code, run in parallel before Resolve, while Resolve still chooses the
+    order-history check itself and makes the judgement — ~4 round trips → ~2, Resolve ~25 s → ~14 s,
+    ~20 s end to end (estimated, not built). Rejected for now because latency is not a judging criterion
+    on its own, and the fully autonomous Resolve is the stronger agent story. Also rejected: moving
+    *all* lookups into code (Resolve would show no tool calls, weakening the agent claim and Foundry's
+    tool-call-accuracy evaluation), lowering Resolve's reasoning (risks the judgement calls), and more
+    tool calls / different models (the limit is not the bottleneck; per-stage models stay as they are).
+    **Say this in both the video's decisions segment and the document** — it shows the trade-off was
+    measured and reasoned, not defaulted.
 - **Video (≤3:00, ≤150 MB) — demonstrate, explain the decisions, reflect (all three are in the brief):**
   - 0:00–0:15 — the hook: a two-person sales team losing their evening, then "the model is forbidden
     from the part that matters".
@@ -438,6 +452,23 @@ Run one enquiry, wait 2–5 minutes, then open each agent's **Traces** tab. **Ta
   chosen: checkpointed human approval, and state that survives a restart.
 
 ---
+
+## Extras — after the original plan, only if time remains (added 2026-09-17)
+
+A judging-criteria review (Innovation / Usability / Impact, each /30) found the biggest remaining gaps are
+Usability (a human cannot resolve an unclear line on the approval card; paste-only intake) and Impact
+evidence. **Harsh's rule: nothing already in this plan is shrunk or cut to make room.** These are built
+only after foundry-04 → foundry-08 all work end to end on Foundry, in this order, and added to the video
+if built. Tracked in `tasks/README.md`'s Extras table.
+
+1. **Approval-card line picker** — candidates computed in code, selection validated server-side,
+   re-priced through the existing pricing path before the draft is created (`tasks/task-extra-01-line-picker.md`).
+2. **WhatsApp photo intake** — Twilio sandbox webhook (signature verified) + Microsoft Dev Tunnel, reusing
+   foundry-04's image intake. Real outbound sending stays a non-goal (docs/SPEC.md §9).
+3. **Faster Resolve, middle version** — see Step 6's recorded latency decision.
+4. **Impact evidence** — a real anonymised enquiry or distributor quote; measured cost per quote.
+
+Email intake is not queued (low value next to WhatsApp here); name it as the next channel.
 
 ## Schedule (today is 13 Sep)
 

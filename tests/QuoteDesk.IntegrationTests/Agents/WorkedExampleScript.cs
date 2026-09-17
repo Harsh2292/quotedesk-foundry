@@ -30,7 +30,8 @@ public static class WorkedExampleScript
     public const string SenderId = "kiran@shreejitextiles.com";
 
     /// <summary>
-    /// One scripted turn per model round-trip for the whole worked example: Extract (1 turn),
+    /// One scripted turn per model round-trip for the whole worked example: Intake (1 turn — a clean
+    /// enquiry needs no tool call, which is the honest default),
     /// Resolve's tool-calling loop (4 turns — resolve_customer, one batched search_catalog call
     /// resolving all three lines at once, one get_customer_history call for the ambiguous spindle
     /// tape, then a final resolution turn), and Price's narration (1 turn). Every tool call in between
@@ -72,6 +73,22 @@ public static class WorkedExampleScript
             Text("Bearings and belt priced within policy at 8%; the spindle tape thickness is unresolved and needs your input; the belt's delivery misses the requested date."),
         ];
 
+        return turns;
+    }
+
+    /// <summary>The term the 7-turn script's Intake turn checks.</summary>
+    public const string IntakeCheckedTerm = "spindle tape";
+
+    /// <summary>
+    /// The same worked example with one extra turn at the front: Intake calls
+    /// <c>verify_catalogue_term</c> before answering, as it would on a word it could not read cleanly.
+    /// Seven turns — used only by the test that means to prove Intake's tool path works end to end,
+    /// not forced onto every test (task foundry-03's test strategy).
+    /// </summary>
+    public static List<ChatResponse> BuildWorkedExampleTurnsWithIntakeTermCheck(int shreejiCustomerId)
+    {
+        var turns = BuildWorkedExampleTurns(shreejiCustomerId);
+        turns.Insert(0, Call("verify_catalogue_term", new Dictionary<string, object?> { ["term"] = IntakeCheckedTerm }));
         return turns;
     }
 

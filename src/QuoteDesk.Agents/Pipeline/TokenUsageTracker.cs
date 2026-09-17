@@ -1,7 +1,7 @@
 namespace QuoteDesk.Agents.Pipeline;
 
 /// <summary>
-/// Tracks cumulative token usage across one pipeline run — Extract, Resolve, and Price's narration
+/// Tracks cumulative token usage across one pipeline run — Intake, Resolve, and Price's narration
 /// call. Shared by reference across the executors built for one run (they are all constructed fresh
 /// per run — see <see cref="EnquiryPipeline"/>).
 ///

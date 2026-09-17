@@ -47,8 +47,7 @@ public sealed class LlmOptions
     /// judgement calls beyond checking an unclear term against the catalogue. Falls back to
     /// <see cref="Model"/>. docs/FOUNDRY-PLAN.md Step 0: routed to the cheap, vision-capable
     /// <c>gpt-5-nano</c> since nothing here is worth the capable model's scarce quota. Renamed from
-    /// <c>ExtractModel</c> in task foundry-02 — the property only; the executor/stage rename itself is
-    /// foundry-03.</summary>
+    /// <c>ExtractModel</c> in task foundry-02; the executor and stage followed in foundry-03.</summary>
     public string? IntakeModel { get; init; }
 
     /// <summary>Model for the Resolve stage — the one autonomous node: a tool-calling loop that has
@@ -65,18 +64,24 @@ public sealed class LlmOptions
     /// <summary>
     /// The reasoning effort sent on the light stages — Intake and Narrate, never Resolve. Bound from a
     /// name ("None", "Low", …), so a misspelt value fails at startup when Program.cs binds this
-    /// section, not mid-run. Null (the class
-    /// default) sends no reasoning option at all, so a provider only receives one where it has been
-    /// verified: "None" is set for the "foundry" profile in appsettings.json, checked live on
-    /// 2026-09-17 against <c>gpt-5-nano</c> (HTTP 200, 0 reasoning tokens) — the model those stages
-    /// actually route to. Not verified for the "gemini" profile, where Google.GenAI maps None to a
-    /// zero thinking budget that some Gemini 3.x models refuse — which is why this is config rather
-    /// than a constant in the pipeline.
+    /// section, not mid-run. Null (the class default) sends no reasoning option at all, so a provider
+    /// only receives one where it has been verified: "None" is set for the "foundry" profile in
+    /// appsettings.json, checked live on 2026-09-17 against <c>gpt-5-nano</c> (HTTP 200, 0 reasoning
+    /// tokens) — the model those stages actually route to. Not verified for the "gemini" profile,
+    /// where Google.GenAI maps None to a zero thinking budget that some Gemini 3.x models refuse —
+    /// which is why this is config rather than a constant in the pipeline.
     /// </summary>
     public ReasoningEffort? LightStageReasoningEffort { get; init; }
 
-    /// <summary>tasks/task-06: "Max 8 tool calls per run, then a forced summary".</summary>
+    /// <summary>tasks/task-06: "Max 8 tool calls per run, then a forced summary". Shared by Intake
+    /// and Resolve since task foundry-03.</summary>
     public int MaxToolCalls { get; init; } = 8;
+
+    /// <summary>The most tool calls the Intake agent may make, counted within <see cref="MaxToolCalls"/>
+    /// — so Resolve is always left at least <c>MaxToolCalls - IntakeMaxToolCalls</c>. Intake only
+    /// checks the odd unclear word; without its own cap, a badly garbled enquiry could spend the run's
+    /// whole budget before Resolve made its first lookup (found in code review, 2026-09-17).</summary>
+    public int IntakeMaxToolCalls { get; init; } = 2;
 
     /// <summary>tasks/task-06: "Per-conversation token budget, returning a clean budget_exceeded
     /// rather than looping". Generous enough for the worked example's handful of tool calls plus
@@ -92,6 +97,11 @@ public sealed class LlmOptions
     /// Whether <c>gemini-3.6-flash</c> honours it is unverified — if a live run logs the
     /// "provider rejected schema-enforced output" warning, set this to false so the pipeline stops
     /// paying for the rejected attempt on every run.
+    ///
+    /// <b>Currently read by no stage (since task foundry-03).</b> Extract was its only consumer; its
+    /// replacement, Intake, calls a tool and so runs with schema enforcement off, the same as Resolve,
+    /// and Narrate returns plain text. Kept rather than removed pending a decision — see
+    /// tasks/task-foundry-03-intake-agent.md's Notes on completion.
     /// </summary>
     public bool UseStructuredOutput { get; init; } = true;
 }

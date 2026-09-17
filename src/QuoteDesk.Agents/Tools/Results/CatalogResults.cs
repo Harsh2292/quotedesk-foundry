@@ -30,6 +30,30 @@ public sealed record CatalogSearchQuery
 }
 
 /// <summary>
+/// <c>verify_catalogue_term</c>'s answer — whether a word the Intake agent is unsure of (a misspelling,
+/// an illegible scrawl, a nickname) is a real catalogue word, and roughly what kind of item it belongs
+/// to. Deliberately <b>no SKU, price or cost</b>: Intake perceives, it never identifies a part — that
+/// stays Resolve's job (docs/FOUNDRY-PLAN.md §4b). Checked by
+/// <c>ToolResultBoundaryTests.CatalogueTermCheck_HasNoSkuPriceOrCostProperty</c>.
+/// </summary>
+public sealed record CatalogueTermCheck
+{
+    /// <summary>Echoes the term as the model sent it.</summary>
+    public required string Term { get; init; }
+
+    /// <summary>True when every meaningful word of <see cref="Term"/> appears as a <i>whole word</i>
+    /// in at least one catalogue item.</summary>
+    public required bool Known { get; init; }
+
+    /// <summary>The product families (Bearings, Belts, Gears, SpindleTapes) the term appears in.</summary>
+    public required IReadOnlyList<string> Families { get; init; }
+
+    /// <summary>At most three item names containing the term, so the model can see the word in
+    /// context — enough to confirm a reading, never enough to pick a part.</summary>
+    public required IReadOnlyList<string> ExampleNames { get; init; }
+}
+
+/// <summary>
 /// One query's result within a <c>search_catalog</c> call. SPEC originally described this tool as
 /// returning a bare <c>CatalogMatch[]</c>, but an array has no way to express "I cannot tell which of
 /// these you mean" — <see cref="Outcome"/> carries that explicitly, corrected in docs/SPEC.md §7 in

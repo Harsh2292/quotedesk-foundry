@@ -144,7 +144,7 @@ public sealed record QuoteRecord(
     DateTimeOffset? SentAt,
     IReadOnlyList<QuoteLineRecord> Lines);
 
-/// <summary>One pipeline run of one enquiry through Extract → Resolve → Price → Approve.
+/// <summary>One pipeline run of one enquiry through Intake → Resolve → Price → Approve.
 /// <see cref="PromptTokens"/>/<see cref="CompletionTokens"/> are the cumulative usage this run has
 /// recorded so far — see <see cref="Entities.AgentRun"/>'s remarks for why this has to be persisted
 /// rather than kept only in memory.</summary>

@@ -23,7 +23,7 @@ public class AgentEventTests
     {
         AgentEvent instance = variantType.Name switch
         {
-            nameof(StageEvent) => new StageEvent { Stage = "extract", At = DateTimeOffset.UtcNow },
+            nameof(StageEvent) => new StageEvent { Stage = "intake", At = DateTimeOffset.UtcNow },
             nameof(ToolStartEvent) => new ToolStartEvent { Name = "search_catalog", Args = null, At = DateTimeOffset.UtcNow },
             nameof(ToolEndEvent) => new ToolEndEvent { Name = "search_catalog", Ms = 12, Ok = true, Result = null },
             nameof(TokenEvent) => new TokenEvent { Text = "hello" },

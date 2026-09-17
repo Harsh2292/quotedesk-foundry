@@ -20,7 +20,7 @@ public interface IAgentRunRepository
     /// cumulative usage as of this call — every call site already holds a live
     /// <c>TokenUsageTracker</c>, so this is always the running total, not a delta. Persisting it here
     /// is what lets a resumed run's fresh tracker start from where the suspended one left off, instead
-    /// of losing everything Extract/Resolve/Price already spent.</summary>
+    /// of losing everything Intake/Resolve/Price already spent.</summary>
     Task<AgentRunRecord> UpdateStatusAsync(
         int id,
         string status,

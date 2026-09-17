@@ -10,13 +10,13 @@ namespace QuoteDesk.Agents.Prompts;
 /// </summary>
 public sealed class PromptLibrary
 {
-    public string Extract { get; }
+    public string Intake { get; }
     public string Resolve { get; }
     public string Narrate { get; }
 
     public PromptLibrary()
     {
-        Extract = Load("extract.md");
+        Intake = Load("intake.md");
         Resolve = Load("resolve.md");
         Narrate = Load("narrate.md");
     }

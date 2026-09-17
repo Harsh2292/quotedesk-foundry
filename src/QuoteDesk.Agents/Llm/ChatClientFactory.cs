@@ -35,7 +35,7 @@ public static class ChatClientFactory
 
     /// <summary>Builds a client for an explicit <paramref name="model"/>, independent of
     /// <see cref="LlmOptions.Model"/> — what <see cref="ChatClientRegistry"/> calls once per distinct
-    /// model name across Extract/Resolve/Narrate.</summary>
+    /// model name across Intake/Resolve/Narrate.</summary>
     public static IChatClient Create(LlmOptions options, string model)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -43,8 +43,7 @@ public static class ChatClientFactory
 
         return options.Provider switch
         {
-            "foundry" => CreateOpenAiCompatible(options, model),
-            "github" => CreateOpenAiCompatible(options, model),
+            "foundry" or "github" => CreateOpenAiCompatible(options, model),
             "gemini" => new Google.GenAI.Client(apiKey: options.ApiKey).AsIChatClient(model),
             _ => throw new InvalidOperationException(
                 $"Unknown Llm:Provider '{options.Provider}'. Expected 'foundry', 'gemini' or 'github'."),

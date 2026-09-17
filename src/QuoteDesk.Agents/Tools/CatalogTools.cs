@@ -6,7 +6,7 @@ using QuoteDesk.Data.Repositories;
 namespace QuoteDesk.Agents.Tools;
 
 /// <summary>
-/// <c>search_catalog</c> — read-only, per docs/SPEC.md §7.
+/// <c>search_catalog</c> and <c>verify_catalogue_term</c> — read-only, per docs/SPEC.md §7.
 ///
 /// Two-stage retrieval. Stage one is recall: a cheap substring lookup per search word, unioned.
 /// Stage two is precision: re-rank that shortlist with <b>whole-word</b> matching (so "ring" no
@@ -36,6 +36,9 @@ public sealed class CatalogTools(ICatalogRepository catalog)
     /// <summary>Never return more than this many candidates. A tool that cannot answer in five rows
     /// should say <c>ambiguous</c> or <c>not_found</c>.</summary>
     private const int MaxCandidates = 5;
+
+    /// <summary>At most this many example names leave <see cref="VerifyCatalogueTermAsync"/>.</summary>
+    private const int MaxExampleNames = 3;
 
     /// <summary>Generic words that carry no signal about which item is meant — dropped from both the
     /// search terms and the score.</summary>
@@ -103,7 +106,7 @@ public sealed class CatalogTools(ICatalogRepository catalog)
 
         // ── stage 2: precision — whole-word match, weighted by how rare each word is ──────────────
         var items = shortlist.Values.ToList();
-        var wordSets = items.ToDictionary(i => i.Sku, i => WordsOf($"{i.Sku} {i.Name} {i.Category} {i.Attributes}"));
+        var wordSets = items.ToDictionary(i => i.Sku, ItemWordsOf);
 
         // A term's weight is its inverse document frequency across the shortlist: a term matching few
         // rows is highly distinguishing; one matching most rows barely narrows anything. Terms that
@@ -189,13 +192,52 @@ public sealed class CatalogTools(ICatalogRepository catalog)
         };
     }
 
+    [Description(
+        "Checks whether a word or short phrase from the enquiry is a real term in the machinery-spares " +
+        "catalogue — use it only when a word is unclear, misspelt or illegible, never to identify a " +
+        "part. Returns whether the term is known, which product families it appears in, and up to " +
+        "three example item names. It never returns a part number or a price.")]
+    public async Task<CatalogueTermCheck> VerifyCatalogueTermAsync(
+        [Description("The unclear word or short phrase, exactly as you read it.")] string term,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(term);
+
+        var words = BuildTerms(term, []);
+        if (words.Count == 0)
+        {
+            return new CatalogueTermCheck { Term = term, Known = false, Families = [], ExampleNames = [] };
+        }
+
+        // Recall with one cheap substring lookup on the longest word (the most selective), then confirm
+        // with whole-word matching of every word — the same two-stage shape as search_catalog, so
+        // "ring" is not "known" just because it sits inside "bearing".
+        var recall = await catalog.SearchAsync(words.MaxBy(w => w.Length)!, cancellationToken);
+        var matches = recall
+            .Where(item => words.All(ItemWordsOf(item).Contains))
+            .ToList();
+
+        return new CatalogueTermCheck
+        {
+            Term = term,
+            Known = matches.Count > 0,
+            Families = [.. matches.Select(i => i.Category).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)],
+            ExampleNames = [.. matches.Select(i => i.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(MaxExampleNames)],
+        };
+    }
+
     /// <summary>Query + hint words, normalised, with stop-words removed. Single-character tokens are
     /// dropped unless they are digits — a bare "3" in "module 3 spur gear" is the distinguishing
-    /// spec (Extract has already separated the quantity, so a lone digit here is not a count).</summary>
+    /// spec (Intake has already separated the quantity, so a lone digit here is not a count).</summary>
     private static IReadOnlyList<string> BuildTerms(string query, string[] hints) =>
         [.. Tokenize(query).Concat(hints.SelectMany(Tokenize))
             .Where(t => (t.Length >= 2 || (t.Length == 1 && char.IsDigit(t[0]))) && !StopWords.Contains(t))
             .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>The whole words an item can be matched on — shared by search_catalog and
+    /// verify_catalogue_term so the two tools can never disagree about what a word match is.</summary>
+    private static HashSet<string> ItemWordsOf(CatalogItemRecord item) =>
+        WordsOf($"{item.Sku} {item.Name} {item.Category} {item.Attributes}");
 
     /// <summary>The distinct normalised words of a catalogue string, for whole-word matching.</summary>
     private static HashSet<string> WordsOf(string text) =>

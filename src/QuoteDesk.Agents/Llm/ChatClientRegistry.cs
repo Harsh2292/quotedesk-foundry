@@ -11,7 +11,7 @@ namespace QuoteDesk.Agents.Llm;
 /// This is the fix for what killed the first live run of the reworked pipeline
 /// (docs/SESSION-LOG.md, 2026-08-31): <c>gemini-3.6-flash</c>'s free tier allows only 5 requests per
 /// minute, and one pipeline run makes ~6 sequential model calls in well under a minute. Before this,
-/// every stage shared one <see cref="IChatClient"/> and therefore one quota bucket. Routing Extract
+/// every stage shared one <see cref="IChatClient"/> and therefore one quota bucket. Routing Intake
 /// and Narrate onto a different, high-quota model gives them their own bucket — the bunching that
 /// produced the run-ending 429 can no longer happen against the scarce Resolve model. Two stages
 /// configured onto the *same* model still share one cached client, so they correctly share one

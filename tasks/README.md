@@ -3,7 +3,7 @@
 The work queue and **the only place status lives**. Each task is finishable in one sitting and
 delivers behaviour through every layer it touches.
 
-**Start here: `/task foundry-01`.** `foundry-00` (the fork itself) is already done — see its notes.
+**Start here: `/task foundry-04`.** `foundry-00` (the fork itself) is already done — see its notes.
 
 You type `/task foundry-NN` and `/clear`, plus plan mode with `Shift + Tab`. Verification, the
 handover note and the status update happen automatically as part of finishing a task. This is the
@@ -17,12 +17,33 @@ fork's equivalent of that project's `docs/SPEC.md` — the plan each task file i
 | foundry-00 | [Fork mechanics](task-foundry-00-fork-and-repo.md) | done |
 | foundry-01 | [New GitHub repo, first push, CI](task-foundry-01-new-repo.md) | done |
 | foundry-02 | [Foundry inference provider](task-foundry-02-provider.md) | done |
-| foundry-03 | [Intake Agent](task-foundry-03-intake-agent.md) | todo |
+| foundry-03 | [Intake Agent](task-foundry-03-intake-agent.md) | done |
 | foundry-04 | [Image intake](task-foundry-04-image-intake.md) | todo |
 | foundry-05 | [Quotation Policy grounding](task-foundry-05-policy-grounding.md) | todo |
 | foundry-06 | [Observability + agent registration](task-foundry-06-observability-registration.md) | todo |
 | foundry-07 | [Evaluation](task-foundry-07-evaluation.md) | todo |
 | foundry-08 | [Video and document](task-foundry-08-submission.md) | todo |
+
+**Carry-over fixes from the foundry-03 code review — do these at the start of `foundry-04`** (its photo
+intake depends on them): `verify_catalogue_term` (1) cannot recognise a misspelt word ("tming belt",
+"spindel tap") because it only accepts exact whole-word matches — suggest the closest catalogue word
+within a small edit distance instead; (2) reports family names such as "SpindleTapes" as unknown,
+because recall searches only SKU and name. Fix (1) with a catalogue vocabulary and it covers (2).
+
+## Extras — only after the whole plan above is done
+
+Harsh's rule (2026-09-17): nothing in the planned queue is shrunk or cut to make room for these. They
+are built only once foundry-04 → foundry-08 all work end to end on Foundry, in this order, as time
+allows, and shown in the video if built.
+
+| # | Extra | Status |
+|---|---|---|
+| extra-01 | [Resolve an unclear line on the approval card](task-extra-01-line-picker.md) — the human picks the item the agent refused to guess, re-priced in code | todo |
+| extra-02 | WhatsApp photo intake (Twilio sandbox + Microsoft Dev Tunnel; reuses foundry-04's image intake). Needs Harsh: Twilio account, sandbox join, dev-tunnel login | todo — no task file yet |
+| extra-03 | Faster Resolve ("middle version": routine lookups in code, in parallel; Resolve keeps the order-history decision) — ~31 s → ~20 s estimated. Decided **not** to build unless time remains; presented in the video/document as a measured alternative either way (`docs/FOUNDRY-PLAN.md` Step 6) | todo — no task file yet |
+| extra-04 | Impact evidence (Harsh, no code): one anonymised real enquiry or one sentence from a real distributor about quoting time; measured cost per quote checked against Azure Cost Management | todo |
+
+Email intake: considered and not queued — low value next to WhatsApp for this business; mention as the next channel.
 
 Status values: `todo` · `in progress` · `done` · `blocked`. Full context, the schedule, the cut list
 and the compliance audit against the course materials: `docs/FOUNDRY-PLAN.md`.

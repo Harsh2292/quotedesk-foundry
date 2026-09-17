@@ -1215,3 +1215,35 @@ identified as a lever but not yet tried.
 **Next:** `foundry-03` (Intake Agent rename + `verify_catalogue_term` tool). While touching Resolve's
 prompt/tools there, also test `ReasoningEffort.None`/`Low` against Resolve specifically, across several
 runs, before applying it — same bar as above.
+
+---
+
+## 2026-09-17 — Review fixes (committed 7e9be87) + foundry-03: Intake Agent
+
+**Done:** A code review of the foundry-01/02 work found two real bugs, both fixed and committed in `7e9be87`. First, the reasoning-off setting had only been tested on `gpt-5-mini` while production sends it to `gpt-5-nano`. Checked live: nano accepts `reasoning_effort: none`. It is now the config value `Llm:LightStageReasoningEffort`, set only for the foundry profile. Second, the Gemini evals were reading the Foundry key and would have sent it to Google; they now read `Llm:GeminiApiKey`. Then foundry-03: the first stage is now the **Intake agent**, which reads the enquiry and may call `verify_catalogue_term`. Resolve is unchanged. One tool-call budget per run is shared by both agents. Live Foundry eval passes in 28s: intake → resolve → price, 6203 resolved, spindle tape unresolved. 140 unit + 54 integration tests green; both builds clean. foundry-03 is staged, **not committed**.
+
+**Files that matter:** `EnquiryPipeline.cs` `BuildNodes` (per-agent tool lists + shared budget), `IntakeExecutor.cs`, `CatalogTools.VerifyCatalogueTermAsync`, `Prompts/intake.md`, `tasks/task-foundry-03-intake-agent.md` Notes on completion.
+
+**Decisions made:** Each agent's tools are named explicitly, not filtered from `ReadToolRegistry`; the old `!= "price_quote"` filter would have silently given Resolve the new tool. `Known` in `verify_catalogue_term` requires whole-word matches, so "ring" doesn't count as known just because it's inside "bearing". Intake uses the same light reasoning as Narrate; the live eval shows extraction is still correct. Ran `code-simplifier` in a worktree; its three cosmetic changes were merged by hand.
+
+**Known gaps:** `Llm:UseStructuredOutput` is now read by nothing, and Intake runs without schema enforcement (the parse-retry still guards it). The live eval doesn't assert whether Intake called the tool on the clean worked example. Approvals suspended before the rename reference executor id `Extract` and may not resume. `verify_catalogue_term` doesn't search `Attributes`, so a thickness like "8mm" reports not known. Resolve's reasoning effort still untested (belongs to the Step 6 latency work).
+
+**Blocked on Harsh:** (1) Commit foundry-03. (2) Decide `Llm:UseStructuredOutput`: delete it, or add schema enforcement on Intake's no-tool final turn. (3) Delete leftover `.claude/worktrees/` folder and branch `worktree-agent-a55cab43871bcb1b0` (my removal was denied); consider gitignoring `.claude/worktrees/`.
+
+**Next:** `foundry-04` (image intake). Intake is the stage that reads photos, and the illegible-word photo is where a live `verify_catalogue_term` call should appear. Its one-image vs `Attachments[]` design gap (15 Sep entry) needs settling first.
+
+---
+
+## 2026-09-17 (cont.) — foundry-03 review follow-ups, latency measured, extras queued
+
+**Done:** Code-reviewed and code-simplified the staged foundry-03 work (simplifier ran in an isolated worktree off an exported patch; its 4 no-behaviour tidy-ups applied). Fixed review finding 1: Intake gets its own tool-call cap (`Llm:IntakeMaxToolCalls` = 2, a child of the run's shared budget), so Resolve always keeps ≥ 8 of 10. Measured real latency with a temporary probe (3 live Foundry runs, deleted afterwards): **31 s average end to end, Resolve 25 s (~80%), 4.3 model round trips and 3.7 tool calls per run, final judgement turn ~10–11 s, both judgement calls correct 3/3**. `gpt-5-mini` never combines independent lookups into one turn. ~47k input / 8k output tokens for the 3 runs. foundry-03 + all of this is **staged, not committed**. Both builds clean; 145 unit + 54 integration tests green.
+
+**Files that matter:** `tasks/README.md` (new carry-over note + Extras table), `docs/FOUNDRY-PLAN.md` Step 6 latency decision and new "Extras" section, `tasks/task-extra-01-line-picker.md`.
+
+**Decisions made:** Keep the pipeline architecture as is. The "middle version" (routine customer + catalogue lookups in code in parallel, Resolve keeps the order-history decision; ~31 s → ~20 s est.) is presented in the video/document as a measured alternative, not built. Rejected: all lookups in code (Resolve would show no tool calls, weakening the agent claim and Foundry's tool-call-accuracy evaluation), lower Resolve reasoning (risks judgement), more tool calls or different models (per-stage models stay as they are). **Harsh's rule: nothing in the original plan is shrunk or cut for new ideas; new features are extras built only after foundry-04 → 08 all work on Foundry.** Extras queued: approval-card line picker (biggest Usability gap: a human cannot resolve an unclear line today), WhatsApp photo intake, faster Resolve, Impact evidence. Email intake not queued.
+
+**Known gaps:** Review findings 2 and 3 are open and must be fixed at the start of foundry-04: `verify_catalogue_term` rejects misspellings ("tming belt") and family names ("SpindleTapes"). `Llm:UseStructuredOutput` still read by nothing. The live Foundry eval was not rerun after the Intake-cap fix (stub tests cover it; the worked example uses 0 Intake tool calls). Leftover git branches `worktree-agent-a55cab43871bcb1b0` / `worktree-agent-ae2e404d1374d4408` and possibly a `.claude/worktrees/` folder.
+
+**Blocked on Harsh:** (1) Commit foundry-03. (2) `Llm:UseStructuredOutput`: delete, or schema-enforce Intake's final turn. (3) Delete the leftover worktree branches/folder; consider gitignoring `.claude/worktrees/`. (4) For extra-04 later: a real anonymised enquiry or a distributor's one-line quote. (5) Before foundry-04: one image or several per enquiry.
+
+**Next:** `foundry-04` (image intake), starting with the two `verify_catalogue_term` carry-over fixes. Then 05 → 08 as planned; extras only after.

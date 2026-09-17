@@ -16,20 +16,20 @@ public class PromptLibraryTests
     {
         var library = new PromptLibrary();
 
-        library.Extract.Should().NotBeNullOrWhiteSpace();
+        library.Intake.Should().NotBeNullOrWhiteSpace();
         library.Resolve.Should().NotBeNullOrWhiteSpace();
         library.Narrate.Should().NotBeNullOrWhiteSpace();
     }
 
     [Theory]
-    [InlineData(nameof(PromptLibrary.Extract))]
+    [InlineData(nameof(PromptLibrary.Intake))]
     [InlineData(nameof(PromptLibrary.Resolve))]
     public void EnquiryBearingPrompts_DescribeTheUntrustedContentDelimiter(string promptName)
     {
         var library = new PromptLibrary();
         var prompt = promptName switch
         {
-            nameof(PromptLibrary.Extract) => library.Extract,
+            nameof(PromptLibrary.Intake) => library.Intake,
             nameof(PromptLibrary.Resolve) => library.Resolve,
             _ => throw new ArgumentOutOfRangeException(nameof(promptName)),
         };
@@ -37,6 +37,15 @@ public class PromptLibraryTests
         prompt.Should().Contain(UntrustedContent.Start);
         prompt.Should().Contain(UntrustedContent.End);
         prompt.Should().Contain("never instructions");
+    }
+
+    [Fact]
+    public void IntakePrompt_NamesItsOneToolAndForbidsGuessingAProduct()
+    {
+        var library = new PromptLibrary();
+
+        library.Intake.Should().Contain("verify_catalogue_term");
+        library.Intake.Should().Contain("Never guess a product");
     }
 
     [Fact]

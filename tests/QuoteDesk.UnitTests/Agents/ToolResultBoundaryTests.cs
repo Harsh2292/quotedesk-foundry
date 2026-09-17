@@ -56,6 +56,22 @@ public class ToolResultBoundaryTests
         offenders.Should().BeEmpty("entities never leave QuoteDesk.Data, and PricedLine carries MarginPct which must not reach the model");
     }
 
+    /// <summary>verify_catalogue_term is Intake's tool, and Intake perceives — it must not be able to
+    /// identify a part or see a price. <see cref="CatalogCandidate"/> legitimately carries a SKU for
+    /// Resolve, so this cannot be a rule over every result type; it is checked on this one directly.</summary>
+    [Fact]
+    public void CatalogueTermCheck_HasNoSkuPriceOrCostProperty()
+    {
+        var offenders = typeof(CatalogueTermCheck).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => p.Name)
+            .Where(n => n.Contains("Sku", StringComparison.OrdinalIgnoreCase)
+                || n.Contains("Price", StringComparison.OrdinalIgnoreCase)
+                || n.Contains("Cost", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        offenders.Should().BeEmpty("Intake confirms a word exists in the catalogue; it never identifies or prices a part");
+    }
+
     private static Type UnwrapCollection(Type type)
     {
         if (type.IsGenericType && typeof(System.Collections.IEnumerable).IsAssignableFrom(type))

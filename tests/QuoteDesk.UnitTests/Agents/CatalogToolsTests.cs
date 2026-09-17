@@ -156,6 +156,94 @@ public class CatalogToolsTests
         result.Candidates.Should().OnlyContain(c => c.Confidence >= 0 && c.Confidence <= 1);
     }
 
+    // ── verify_catalogue_term ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_KnownTerm_ReturnsKnownWithItsFamily()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync("spindle tape", CancellationToken.None);
+
+        check.Term.Should().Be("spindle tape");
+        check.Known.Should().BeTrue();
+        check.Families.Should().Equal("SpindleTapes");
+        check.ExampleNames.Should().NotBeEmpty().And.OnlyContain(n => n.Contains("Spindle Tape"));
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_UnknownTerm_ReturnsNotKnownAndNothingElse()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync("hydraulic seal", CancellationToken.None);
+
+        check.Known.Should().BeFalse();
+        check.Families.Should().BeEmpty();
+        check.ExampleNames.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task VerifyCatalogueTermAsync_EmptyOrWhitespace_ReturnsNotKnown(string term)
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync(term, CancellationToken.None);
+
+        check.Known.Should().BeFalse();
+        check.Families.Should().BeEmpty();
+        check.ExampleNames.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_OnlyStopWords_ReturnsNotKnown()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync("the same", CancellationToken.None);
+
+        check.Known.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_WordOnlyInsideAnotherWord_IsNotKnown()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        // "ring" is a substring of "bearing" but not a whole word of any bearing — the exact bug the
+        // two-stage ranker fixed for search_catalog. On its own it matches only "Ring Frame" tapes.
+        var check = await tools.VerifyCatalogueTermAsync("ring", CancellationToken.None);
+
+        check.Known.Should().BeTrue();
+        check.Families.Should().Equal("SpindleTapes");
+
+        var nonsense = await tools.VerifyCatalogueTermAsync("earin", CancellationToken.None);
+        nonsense.Known.Should().BeFalse("'earin' appears only inside 'bearing', never as a word");
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_BroadTerm_CapsExampleNamesAtThree()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync("bearing", CancellationToken.None);
+
+        check.Known.Should().BeTrue();
+        check.ExampleNames.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_NullTerm_Throws()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var act = async () => await tools.VerifyCatalogueTermAsync(null!, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ArgumentNullException>();
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static CatalogSearchQuery Q(string query, params string[] hints) =>

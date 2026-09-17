@@ -8,11 +8,13 @@ using QuoteDesk.Data.Repositories;
 namespace QuoteDesk.Agents.Pipeline;
 
 /// <summary>
-/// The Resolve stage — the one autonomous node (tasks/task-06-agents-workflow.md). The agent, its
-/// tool wrappers, and the tool-call budget are all built fresh inside <see cref="HandleAsync"/>,
-/// rather than once in the constructor, because <see cref="TracedAIFunction"/> needs the live
-/// <see cref="IWorkflowContext"/> of this exact invocation to emit trace events, and that is only
-/// available once <see cref="HandleAsync"/> is called.
+/// The Resolve stage — the decision-making agent (tasks/task-06-agents-workflow.md). The agent and its
+/// tool wrappers are built fresh inside <see cref="HandleAsync"/>, rather than once in the
+/// constructor, because <see cref="TracedAIFunction"/> needs the live <see cref="IWorkflowContext"/>
+/// of this exact invocation to emit trace events, and that is only available once
+/// <see cref="HandleAsync"/> is called. The <see cref="ToolCallBudget"/> is the exception: it is
+/// passed in, one instance per run, shared with the Intake agent, so <c>Llm:MaxToolCalls</c> caps the
+/// whole run rather than each agent separately (task foundry-03).
 /// </summary>
 public sealed class ResolveExecutor(
     string id,
@@ -21,6 +23,7 @@ public sealed class ResolveExecutor(
     IReadOnlyList<AIFunction> lookupTools,
     string instructions,
     int maxToolCalls,
+    ToolCallBudget budget,
     ICatalogRepository catalog,
     ICustomerRepository customers,
     ILogger logger)
@@ -34,7 +37,6 @@ public sealed class ResolveExecutor(
         await context.AddEventAsync(
             new AgentTraceEvent(new StageEvent { Stage = "resolve", At = DateTimeOffset.UtcNow, Model = model }), cancellationToken);
 
-        var budget = new ToolCallBudget(maxToolCalls);
         ValueTask Emit(AgentEvent evt, CancellationToken ct) => context.AddEventAsync(new AgentTraceEvent(evt), ct);
         var tracedTools = lookupTools.Select(t => (AITool)new TracedAIFunction(t, budget, Emit)).ToList();
 

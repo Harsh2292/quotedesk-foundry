@@ -56,7 +56,7 @@ public static class ModelJson
 /// real <c>gemini-3.6-flash</c> during task 07's manual verification, where <c>requiredBy</c> came
 /// back as the ISO date the prompt asks for on one run and the literal word <c>"5th"</c> on another,
 /// for the same enquiry. The strict built-in <see cref="DateOnly"/> converter throws on the second
-/// case, which would fail the entire Extract stage over one optional, informational field — nothing
+/// case, which would fail the entire Intake stage over one optional, informational field — nothing
 /// downstream depends on <c>RequiredBy</c> being present (docs/DOMAIN.md's actual delivery dates are
 /// computed by <c>QuoteDesk.Domain</c> from stock and lead time, never from what the customer asked
 /// for). So this degrades a date it cannot confidently parse to null, the same as the field never

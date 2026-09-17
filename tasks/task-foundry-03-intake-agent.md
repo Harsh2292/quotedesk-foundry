@@ -53,18 +53,18 @@ only the one that means to.
 
 ## Acceptance criteria
 
-- [ ] `verify_catalogue_term` implemented, registered, unit-tested (known term, unknown term, empty,
+- [x] `verify_catalogue_term` implemented, registered, unit-tested (known term, unknown term, empty,
       whitespace), and provably free of SKU/price/cost fields
-- [ ] `IntakeExecutor` replaces `ExtractExecutor`; stage name `"intake"`
-- [ ] `resolve.md`... `intake.md` present, `extract.md` gone, `PromptLibraryTests` updated
-- [ ] Shared `ToolCallBudget` threaded through `BuildNodes`, `MaxToolCalls` respected across both agents
-- [ ] The 6-turn worked-example test still passes with Intake making no tool call
-- [ ] A new 7-turn test proves Intake's tool call is visible in the trace as a `tool_start`/`tool_end`
+- [x] `IntakeExecutor` replaces `ExtractExecutor`; stage name `"intake"`
+- [x] `intake.md` present, `extract.md` gone, `PromptLibraryTests` updated
+- [x] Shared `ToolCallBudget` threaded through `BuildNodes`, `MaxToolCalls` respected across both agents
+- [x] The 6-turn worked-example test still passes with Intake making no tool call
+- [x] A new 7-turn test proves Intake's tool call is visible in the trace as a `tool_start`/`tool_end`
       pair
-- [ ] `ResolveAgentToolBoundaryTests` becomes a `[Theory]` covering **both** `IntakeExecutor` and
+- [x] `ResolveAgentToolBoundaryTests` becomes a `[Theory]` covering **both** `IntakeExecutor` and
       `ResolveExecutor` — neither can reach a write tool
-- [ ] Stage-order assertions updated (`extract` → `intake` everywhere it appears)
-- [ ] Both build configs and the full non-eval test suite pass
+- [x] Stage-order assertions updated (`extract` → `intake` everywhere it appears)
+- [x] Both build configs and the full non-eval test suite pass
 
 ## Out of scope
 
@@ -73,4 +73,57 @@ written so a photo slots in without further change to this stage's shape.
 
 ## Notes on completion
 
-*(fill in once run)*
+**Done 2026-09-17.** Debug and Release builds clean with `-warnaserror`; 140 unit + 54 integration tests
+green; `npm run build` + `npm run lint` pass (two pre-existing `only-export-components` warnings in
+untouched files). `FoundryWorkedExampleEval` passed live in 28s on the production model split
+(Intake/Narrate `gpt-5-nano` with reasoning off, Resolve `gpt-5-mini`): stages in order
+intake → resolve → price, `BRG-6203-2RS` resolved, spindle tape unresolved.
+
+**What was built**
+- `verify_catalogue_term` (`CatalogTools.VerifyCatalogueTermAsync`) → `CatalogueTermCheck`. Recall is one
+  `SearchAsync` on the term's longest word; `Known` requires every meaningful word to appear as a
+  **whole word** in an item, reusing `search_catalog`'s own tokenizer and stop-words — otherwise "ring"
+  would be "known" via "bea*ring*", the bug the two-stage ranker already fixed once. Seven unit tests,
+  plus a reflection test that the result type has no Sku/Price/Cost property.
+- `IntakeExecutor` replaces `ExtractExecutor` (built like `ResolveExecutor`: agent assembled in
+  `HandleAsync`, tools wrapped in `TracedAIFunction`, `useSchema: false`). Stage `"intake"`, executor id
+  `"Intake"`. `intake.md` replaces `extract.md`, adding the one-tool rules.
+- `BuildNodes`: one `ToolCallBudget` per run shared by both agents; **tool lists named explicitly** per
+  agent via a `ToolsNamed` helper that throws on an unknown name. This replaced the old
+  `Where(t => t.Name != "price_quote")` filter, which would have silently handed Resolve the new tool
+  too — the plan did not call this out.
+- Tests: `ResolveAgentToolBoundaryTests` is a `[Theory]` over both executors; the 6-turn worked example
+  passes unchanged; a 7-turn script proves the tool pair lands between the `intake` and `resolve` stage
+  events; a shared-budget test (limit 2) proves Resolve's second call is refused because Intake spent one.
+- Web: `'intake'` added to the stage union with `'extract'` kept as legacy; labels "Read the enquiry" /
+  "Checked a word against the catalogue"; badge "Intake" for both values.
+
+**Left out / deliberate**
+- Resolve's reasoning effort is untouched — testing None/Low there needs several live runs and belongs
+  to the latency step (`docs/FOUNDRY-PLAN.md` Step 6), not this task.
+- Contract type names (`ExtractedEnquiry`, `ExtractionResult`) kept, per the task.
+
+**Surprises / open decisions for Harsh**
+- **`Llm:UseStructuredOutput` is now read by nothing.** Extract was its only consumer; Intake needs schema
+  mode off because it calls a tool, and Narrate returns plain text. Intake therefore lost provider-side
+  schema enforcement — the parse-retry layer still guards it, and the live run parsed cleanly. Options:
+  delete the setting, or give Intake schema enforcement only on a no-tool final turn (more code).
+  Documented in `LlmOptions` for now, not removed.
+- Whether real Intake ever calls the tool on a clean enquiry is not asserted by the live eval; it is
+  expected not to. foundry-04's illegible-photo case is where the live tool call should show up.
+- A run suspended at approval **before** this change has checkpoints referencing executor id `Extract`;
+  resuming it after the rename may fail. Local demo data only.
+- `SearchAsync` matches SKU and Name, not `Attributes`, so a term that only lives in an attribute (e.g. a
+  thickness like "8mm") reports `Known = false`. Fine for "is this a product word"; revisit if foundry-04's
+  photos need it.
+
+**Post-review follow-up (same day):** a code review found Intake could spend the run's shared tool-call
+budget before Resolve started. Fixed with `Llm:IntakeMaxToolCalls` (default 2): Intake draws from a
+capped child `ToolCallBudget` of the run's budget, so Resolve always keeps at least
+`MaxToolCalls - IntakeMaxToolCalls`; 5 unit tests in `ToolCallBudgetTests`. The review's other two
+findings (`verify_catalogue_term` cannot handle misspellings or family names) are carried over to the
+start of foundry-04. 145 unit + 54 integration tests green after the fix.
+
+**Next task should know:** Intake's constructor already takes the prompt as a string built in
+`HandleAsync` — foundry-04 changes that to a `ChatMessage` carrying `DataContent`, with no change to the
+stage's shape or the shared budget.

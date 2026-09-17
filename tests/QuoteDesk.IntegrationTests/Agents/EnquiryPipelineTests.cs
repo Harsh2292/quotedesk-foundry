@@ -15,7 +15,7 @@ using QuoteDesk.IntegrationTests.Data;
 namespace QuoteDesk.IntegrationTests.Agents;
 
 /// <summary>
-/// Drives the full pipeline — Extract → Resolve → Price → suspend → Approve — through a stubbed
+/// Drives the full pipeline — Intake → Resolve → Price → suspend → Approve — through a stubbed
 /// <see cref="IChatClient"/> against the real, deterministically seeded database. CLAUDE.md:
 /// "Integration tests use a stubbed IChatClient. CI must pass with no network and no API key."
 /// docs/DOMAIN.md's worked example is the primary eval case reproduced here.
@@ -31,7 +31,7 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
     /// retry layer existed, one reply of prose instead of JSON killed the entire run — the failure had
     /// no recovery path at all. Now the parse error is handed back and the run continues.</summary>
     [Fact]
-    public async Task StartAsync_WhenExtractRepliesWithProseInsteadOfJson_RetriesWithTheErrorAndStillReachesApproval()
+    public async Task StartAsync_WhenIntakeRepliesWithProseInsteadOfJson_RetriesWithTheErrorAndStillReachesApproval()
     {
         var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
         var turns = WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id);
@@ -58,7 +58,7 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
 
         var events = await CollectAsync(pipeline.StartAsync(ShreejiEnquiryId, CancellationToken.None));
 
-        events.OfType<StageEvent>().Select(e => e.Stage).Should().ContainInOrder("extract", "resolve", "price");
+        events.OfType<StageEvent>().Select(e => e.Stage).Should().ContainInOrder("intake", "resolve", "price");
 
         var toolNames = events.OfType<ToolStartEvent>().Select(e => e.Name).ToList();
         toolNames.Should().Contain(["resolve_customer", "search_catalog", "get_customer_history"]);
@@ -255,7 +255,7 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         var secondAttempt = await CollectAsync(
             BuildPipeline(new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji.Id))).ProcessAsync(ingested.EnquiryId, CancellationToken.None));
 
-        secondAttempt.OfType<StageEvent>().Select(e => e.Stage).Should().ContainInOrder("extract", "resolve", "price");
+        secondAttempt.OfType<StageEvent>().Select(e => e.Stage).Should().ContainInOrder("intake", "resolve", "price");
         secondAttempt.Should().ContainSingle(e => e is ApprovalRequiredEvent);
     }
 
@@ -327,7 +327,57 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         return user.Id;
     }
 
-    private EnquiryPipeline BuildPipeline(IChatClient chatClient, int tokenBudget = 20_000)
+    /// <summary>task foundry-03: Intake's one tool is real, traced, and runs before Resolve — its
+    /// tool_start/tool_end pair sits between the "intake" and "resolve" stage events, and the run still
+    /// reaches approval.</summary>
+    [Fact]
+    public async Task StartAsync_WhenIntakeChecksATerm_TracesTheToolCallInsideTheIntakeStage()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var stub = new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurnsWithIntakeTermCheck(shreeji!.Id));
+        var pipeline = BuildPipeline(stub);
+
+        var events = await CollectAsync(pipeline.StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        events.Should().NotContain(e => e is ErrorEvent);
+        events.Should().ContainSingle(e => e is ApprovalRequiredEvent);
+
+        var intakeAt = events.FindIndex(e => e is StageEvent { Stage: "intake" });
+        var resolveAt = events.FindIndex(e => e is StageEvent { Stage: "resolve" });
+        var startAt = events.FindIndex(e => e is ToolStartEvent { Name: "verify_catalogue_term" });
+        var endAt = events.FindIndex(e => e is ToolEndEvent { Name: "verify_catalogue_term" });
+
+        intakeAt.Should().BeGreaterThanOrEqualTo(0);
+        startAt.Should().BeGreaterThan(intakeAt);
+        endAt.Should().BeGreaterThan(startAt);
+        resolveAt.Should().BeGreaterThan(endAt, "Intake's tool call belongs to the Intake stage, before Resolve begins");
+
+        var end = (ToolEndEvent)events[endAt];
+        end.Ok.Should().BeTrue();
+        JsonSerializer.Serialize(end.Result, JsonOptions).Should().Contain("\"known\":true").And.NotContain("sku", "Intake's tool never identifies a part");
+    }
+
+    /// <summary>task foundry-03: one ToolCallBudget per run, shared by both agents. With a limit of 2,
+    /// Intake's term check and Resolve's resolve_customer spend it, so Resolve's next call is refused.
+    /// If each agent had its own budget, that call would have succeeded — which is what this proves.</summary>
+    [Fact]
+    public async Task StartAsync_ToolCallBudget_IsSharedAcrossIntakeAndResolve()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var stub = new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurnsWithIntakeTermCheck(shreeji!.Id));
+        var pipeline = BuildPipeline(stub, maxToolCalls: 2);
+
+        var events = await CollectAsync(pipeline.StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        var toolEnds = events.OfType<ToolEndEvent>().ToList();
+        toolEnds.Should().Contain(e => e.Name == "verify_catalogue_term" && e.Ok);
+        toolEnds.Should().Contain(e => e.Name == "resolve_customer" && e.Ok);
+        toolEnds.Should().Contain(e => e.Name == "search_catalog" && !e.Ok,
+            "the run's third tool call exceeds the shared limit of 2, even though it is only Resolve's second");
+        toolEnds.Count(e => e.Ok).Should().Be(2);
+    }
+
+    private EnquiryPipeline BuildPipeline(IChatClient chatClient, int tokenBudget = 20_000, int maxToolCalls = 8)
     {
         var timeProvider = new FixedTimeProvider(Now);
         var customerTools = new CustomerTools(fixture.Customers, fixture.OrderHistory);
@@ -336,10 +386,10 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         var pricingTools = new PricingTools(fixture.Customers, fixture.Catalog, fixture.Stock, fixture.PriceRules, timeProvider);
         var readTools = new ReadToolRegistry(customerTools, catalogTools, stockTools, pricingTools);
         var writeTools = new QuoteWriteTools(fixture.Quotes, fixture.Enquiries, timeProvider);
-        var options = new LlmOptions { Endpoint = "https://example.test/", ApiKey = "unused", Model = "stub", MaxToolCalls = 8, TokenBudget = tokenBudget };
+        var options = new LlmOptions { Endpoint = "https://example.test/", ApiKey = "unused", Model = "stub", MaxToolCalls = maxToolCalls, TokenBudget = tokenBudget };
         var checkpointStore = new SqlCheckpointStore(fixture.Checkpoints, timeProvider);
 
-        // One shared stub instance for every stage — its ordered turns assume Extract, Resolve and
+        // One shared stub instance for every stage — its ordered turns assume Intake, Resolve and
         // Narrate all draw from the same script, exactly as they did before per-stage model routing.
         var chatClients = new ChatClientRegistry(options, _ => chatClient, loggerFactory: null);
 

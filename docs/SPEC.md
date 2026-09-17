@@ -392,11 +392,22 @@ know what came before. See §8's "Resolved 2026-09-01" for the full mechanism.
 |---|---|---|
 | `resolve_customer` | `(string companyName, string senderId) -> CustomerMatch` | no |
 | `search_catalog` | `(CatalogSearchQuery[] queries) -> CatalogSearchResult[]` | no |
+| `verify_catalogue_term` | `(string term) -> CatalogueTermCheck` | no |
 | `get_customer_history` | `(int customerId, string? sku) -> PriorPurchase[]` | no |
 | `check_stock` | `(string sku, int qty) -> StockResult` | no |
 | `price_quote` | `(int? customerId, QuoteLineRequest[] lines) -> PricedQuote` | no |
 | `create_quote_draft` | `(int enquiryId, PricedQuote quote) -> QuoteDraftResult` | **gated** |
 | `send_quote` | `(int quoteId) -> SendResult` | **gated** |
+
+**Resolved in task foundry-03 — `verify_catalogue_term`, the Intake agent's one tool.** Returns
+`CatalogueTermCheck { Term, Known, Families[], ExampleNames[≤3] }` — whether a word is a real catalogue
+term, matched on **whole words** (so "ring" is not known because of "bea*ring*"), and which families it
+appears in. No SKU, price or cost, checked by a reflection test. Each agent's tools are named
+explicitly in `EnquiryPipeline.BuildNodes`: Intake gets only this one, Resolve its four lookups; a new
+tool in `ReadToolRegistry` reaches no agent until it is added to one of those lists. One
+`ToolCallBudget` per run is shared by both agents, so `Llm:MaxToolCalls` caps the run. The first
+pipeline stage is now `intake` (the `AgentEvent` stage value `extract` survives only in stored traces
+and the recorded replay fixtures).
 
 **Two signatures corrected during task 05, in the same commit as the code:**
 

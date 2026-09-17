@@ -19,11 +19,11 @@ public abstract record AgentEvent;
 
 public sealed record StageEvent : AgentEvent
 {
-    /// <summary>"extract" | "resolve" | "price".</summary>
+    /// <summary>"intake" | "resolve" | "price". ("extract" is the pre-foundry-03 name, still present in stored traces.)</summary>
     public required string Stage { get; init; }
     public required DateTimeOffset At { get; init; }
 
-    /// <summary>The model answering this stage's call (docs/SPEC.md §4: Extract/Narrate/Resolve are
+    /// <summary>The model answering this stage's call (docs/SPEC.md §4: Intake/Narrate/Resolve are
     /// routed to different models by difficulty). Optional — null for a stage with no model call of
     /// its own, and left off by any recorded fixture written before this field existed.</summary>
     public string? Model { get; init; }

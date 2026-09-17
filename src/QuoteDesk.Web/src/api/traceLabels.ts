@@ -7,6 +7,7 @@
 const TOOL_LABELS: Record<string, string> = {
   resolve_customer: 'Matched customer',
   search_catalog: 'Searched catalogue',
+  verify_catalogue_term: 'Checked a word against the catalogue',
   get_customer_history: 'Checked order history',
   check_stock: 'Checked stock',
   price_quote: 'Priced the quote',
@@ -15,7 +16,8 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 const STAGE_LABELS: Record<string, string> = {
-  extract: 'Read the enquiry',
+  intake: 'Read the enquiry',
+  extract: 'Read the enquiry', // legacy name for intake, kept for stored traces and fixtures
   resolve: 'Resolved items & stock',
   price: 'Priced the quote',
 }
@@ -36,8 +38,9 @@ export function stageLabel(stage: string): string {
 /** Short badge text for the stage column. */
 export function stageBadge(stage: string): string {
   switch (stage) {
+    case 'intake':
     case 'extract':
-      return 'Extract'
+      return 'Intake'
     case 'resolve':
       return 'Resolve'
     case 'price':

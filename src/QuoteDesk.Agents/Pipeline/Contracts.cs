@@ -15,7 +15,7 @@ public sealed record ExtractedLine
     public string? Uom { get; init; }
 }
 
-/// <summary>The Extract stage's output — structure, not resolution. No SKU, no price, no customer id
+/// <summary>The Intake stage's output — structure, not resolution. No SKU, no price, no customer id
 /// appears here; that is what Resolve and Price add.</summary>
 public sealed record ExtractedEnquiry
 {
@@ -28,7 +28,7 @@ public sealed record ExtractedEnquiry
 
     /// <summary>Lenient on read (see <see cref="LenientNullableDateOnlyConverter"/>): a model that
     /// does not follow the ISO-date instruction degrades to null here rather than failing the whole
-    /// Extract stage.</summary>
+    /// Intake stage.</summary>
     [JsonConverter(typeof(LenientNullableDateOnlyConverter))]
     public DateOnly? RequiredBy { get; init; }
 
@@ -37,9 +37,9 @@ public sealed record ExtractedEnquiry
     public string? CommercialAsk { get; init; }
 }
 
-/// <summary>Extract's actual output edge type — bundles the original <see cref="EnquiryInput"/> back
+/// <summary>Intake's actual output edge type — bundles the original <see cref="EnquiryInput"/> back
 /// in alongside <see cref="ExtractedEnquiry"/>, since Resolve needs the sender id and raw body (for
-/// <c>resolve_customer</c> and the untrusted-content wrapper) and Extract's own structured result
+/// <c>resolve_customer</c> and the untrusted-content wrapper) and Intake's own structured result
 /// does not carry them forward.</summary>
 public sealed record ExtractionResult
 {

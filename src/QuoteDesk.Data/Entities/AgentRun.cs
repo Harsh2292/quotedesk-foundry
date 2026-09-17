@@ -1,7 +1,7 @@
 namespace QuoteDesk.Data.Entities;
 
 /// <summary>
-/// One pipeline run of one enquiry through Extract → Resolve → Price → Approve. This is what
+/// One pipeline run of one enquiry through Intake → Resolve → Price → Approve. This is what
 /// <c>GET /api/approvals</c> (task 07) reads to list pending approvals, and what
 /// <see cref="Repositories.IAgentRunRepository"/> uses to find the checkpoint session to resume.
 /// </summary>
@@ -34,7 +34,7 @@ public class AgentRun
     public required DateTimeOffset CreatedAt { get; set; }
     public required DateTimeOffset UpdatedAt { get; set; }
 
-    /// <summary>Cumulative usage from every model call this run has made so far (Extract, Resolve,
+    /// <summary>Cumulative usage from every model call this run has made so far (Intake, Resolve,
     /// Price's narration). Null until the first status update. Exists because the run suspends and
     /// resumes across two separate HTTP requests (<c>/process</c>, then <c>/approvals/{id}</c>), each
     /// building its own in-memory token tracker — without persisting the running total here, the

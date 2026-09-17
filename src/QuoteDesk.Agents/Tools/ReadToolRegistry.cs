@@ -3,11 +3,11 @@ using Microsoft.Extensions.AI;
 namespace QuoteDesk.Agents.Tools;
 
 /// <summary>
-/// The tools the Resolve agent is constructed with — read-only, per docs/SPEC.md §7. Deliberately a
-/// separate object from <see cref="WriteToolRegistry"/> rather than one registry with a filter: the
-/// Resolve agent is never given a reference to <see cref="WriteToolRegistry"/> at all, so there is no
-/// runtime check to bypass. That separation is the entire enforcement of CLAUDE.md rule 3, "nothing
-/// leaves without a human."
+/// Every read-only tool, per docs/SPEC.md §7 — the pool the Intake and Resolve agents' tool lists are
+/// drawn from, by name, in <c>EnquiryPipeline.BuildNodes</c>. Deliberately a separate object from
+/// <see cref="WriteToolRegistry"/> rather than one registry with a filter: neither agent is ever given
+/// a reference to <see cref="WriteToolRegistry"/> at all, so there is no runtime check to bypass. That
+/// separation is the entire enforcement of CLAUDE.md rule 3, "nothing leaves without a human."
 /// </summary>
 public sealed class ReadToolRegistry
 {
@@ -18,6 +18,7 @@ public sealed class ReadToolRegistry
             AIFunctionFactory.Create(customerTools.ResolveCustomerAsync, Named("resolve_customer")),
             AIFunctionFactory.Create(customerTools.GetCustomerHistoryAsync, Named("get_customer_history")),
             AIFunctionFactory.Create(catalogTools.SearchCatalogAsync, Named("search_catalog")),
+            AIFunctionFactory.Create(catalogTools.VerifyCatalogueTermAsync, Named("verify_catalogue_term")),
             AIFunctionFactory.Create(stockTools.CheckStockAsync, Named("check_stock")),
             AIFunctionFactory.Create(pricingTools.PriceQuoteAsync, Named("price_quote")),
         ];

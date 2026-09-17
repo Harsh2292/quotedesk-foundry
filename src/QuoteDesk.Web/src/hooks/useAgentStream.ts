@@ -18,7 +18,7 @@ interface AgentStreamState {
 export interface UseAgentStream extends AgentStreamState {
   /** Whether the last event is an approval gate — the run suspended, waiting for a human. */
   awaitingApproval: boolean
-  /** POST an enquiry into the pipeline: Extract → Resolve → Price, then suspend at the approval gate. */
+  /** POST an enquiry into the pipeline: Intake → Resolve → Price, then suspend at the approval gate. */
   process: (enquiryId: number) => void
   /** POST an approval decision and stream the Approve stage. */
   decide: (approvalId: number, decision: 'approve' | 'reject', rejectionReason?: string) => void

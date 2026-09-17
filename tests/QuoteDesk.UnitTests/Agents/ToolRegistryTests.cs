@@ -15,13 +15,13 @@ public class ToolRegistryTests
     private static readonly DateTimeOffset Now = new(2026, 3, 26, 8, 41, 0, TimeSpan.FromHours(5.5));
 
     [Fact]
-    public void ReadToolRegistry_ContainsExactlyTheFiveReadTools()
+    public void ReadToolRegistry_ContainsExactlyTheSixReadTools()
     {
         var registry = BuildReadRegistry();
 
         registry.Tools.Select(t => t.Name).Should().BeEquivalentTo(
         [
-            "resolve_customer", "get_customer_history", "search_catalog", "check_stock", "price_quote",
+            "resolve_customer", "get_customer_history", "search_catalog", "verify_catalogue_term", "check_stock", "price_quote",
         ]);
     }
 

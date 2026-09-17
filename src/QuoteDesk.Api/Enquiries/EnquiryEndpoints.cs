@@ -81,7 +81,7 @@ public static class EnquiryEndpoints
     /// reports it as an <c>ErrorEvent</c> on the stream itself, which is the one error channel a
     /// client reading SSE is already watching. Calls <c>ProcessAsync</c>, not <c>StartAsync</c>
     /// directly — <c>ProcessAsync</c> transparently resumes a failed run past Resolve when Resolve
-    /// already succeeded, rather than always restarting from Extract; the existing "Retry" button on
+    /// already succeeded, rather than always restarting from Intake; the existing "Retry" button on
     /// the Desk needed no change to gain this.</summary>
     private static async Task ProcessAsync(
         int id,

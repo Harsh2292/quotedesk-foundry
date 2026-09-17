@@ -119,6 +119,7 @@ public class FoundryWorkedExampleEval
         }
 
         events.Should().NotContain(e => e is ErrorEvent, "a real Foundry call should complete cleanly against the worked example");
+        events.OfType<StageEvent>().Select(e => e.Stage).Should().ContainInOrder("intake", "resolve", "price");
         events.OfType<ToolStartEvent>().Select(e => e.Name).Should().Contain("resolve_customer");
         var approval = events.OfType<ApprovalRequiredEvent>().Should().ContainSingle().Subject;
 

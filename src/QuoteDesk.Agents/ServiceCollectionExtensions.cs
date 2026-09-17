@@ -23,7 +23,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>Adds the pipeline itself — Extract/Resolve/Price/Approve, and everything they need.
+    /// <summary>Adds the pipeline itself — Intake/Resolve/Price/Approve, and everything they need.
     /// Takes a bound <see cref="LlmOptions"/> the same way <c>AddQuoteDeskData</c> takes a connection
     /// string, rather than this project depending on <c>Microsoft.Extensions.Configuration</c> itself.</summary>
     public static IServiceCollection AddQuoteDeskAgentPipeline(this IServiceCollection services, LlmOptions llmOptions)
@@ -33,7 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddQuoteDeskAgents();
         services.AddSingleton(llmOptions);
 
-        // One registry, one pipeline: every model call in the app — Extract, Resolve's tool loop,
+        // One registry, one pipeline: every model call in the app — Intake, Resolve's tool loop,
         // Narrate — goes through a client this registry built, so the logging middleware wraps all of
         // them regardless of which model answered. When a run fails, the request and response are in
         // the log, not just a database row to reverse-engineer. See ChatClientRegistry's remarks for
