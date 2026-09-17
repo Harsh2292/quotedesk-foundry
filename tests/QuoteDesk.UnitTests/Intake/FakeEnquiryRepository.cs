@@ -17,9 +17,12 @@ internal sealed class FakeEnquiryRepository : IEnquiryRepository
     public Task<int> CreateAsync(NewEnquiry enquiry, CancellationToken cancellationToken)
     {
         var id = _stored.Count + 1;
-        _stored.Add(new EnquiryRecord(id, enquiry.Channel, enquiry.SenderId, enquiry.RawBody, enquiry.ReceivedAt, enquiry.CustomerId, enquiry.Status));
+        _stored.Add(new EnquiryRecord(id, enquiry.Channel, enquiry.SenderId, enquiry.RawBody, enquiry.ReceivedAt, enquiry.CustomerId, enquiry.Status, enquiry.ImageDataUrl));
         return Task.FromResult(id);
     }
+
+    public Task<string?> GetImageDataUrlAsync(int id, CancellationToken cancellationToken) =>
+        Task.FromResult(_stored.SingleOrDefault(e => e.Id == id)?.ImageDataUrl);
 
     public Task UpdateCustomerAsync(int id, int customerId, CancellationToken cancellationToken)
     {

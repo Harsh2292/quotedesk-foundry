@@ -90,6 +90,7 @@ public class FoundryWorkedExampleEval
             ApiKey = apiKey,
             Model = "gpt-5-mini",
             IntakeModel = "gpt-5-nano",
+            IntakeImageModel = "gpt-5-mini",
             ResolveModel = "gpt-5-mini",
             NarrateModel = "gpt-5-nano",
             LightStageReasoningEffort = ReasoningEffort.None,

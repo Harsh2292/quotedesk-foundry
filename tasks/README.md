@@ -3,7 +3,7 @@
 The work queue and **the only place status lives**. Each task is finishable in one sitting and
 delivers behaviour through every layer it touches.
 
-**Start here: `/task foundry-04`.** `foundry-00` (the fork itself) is already done — see its notes.
+**Start here: `/task foundry-05`.** `foundry-00` (the fork itself) is already done — see its notes.
 
 You type `/task foundry-NN` and `/clear`, plus plan mode with `Shift + Tab`. Verification, the
 handover note and the status update happen automatically as part of finishing a task. This is the
@@ -18,7 +18,7 @@ fork's equivalent of that project's `docs/SPEC.md` — the plan each task file i
 | foundry-01 | [New GitHub repo, first push, CI](task-foundry-01-new-repo.md) | done |
 | foundry-02 | [Foundry inference provider](task-foundry-02-provider.md) | done |
 | foundry-03 | [Intake Agent](task-foundry-03-intake-agent.md) | done |
-| foundry-04 | [Image intake](task-foundry-04-image-intake.md) | todo |
+| foundry-04 | [Image intake](task-foundry-04-image-intake.md) | done — reviewed; only the demo photo's `verify_catalogue_term` check remains, done while recording (foundry-08) |
 | ~~foundry-04 multi-part~~ | ⏸ **Ignore for now** — [several photos + text → one quote](task-extra-06-multi-part-enquiries.md) (designed, deferred for time; tracked as extra-06) | on hold |
 | ~~foundry-04b~~ | ⏸ **Ignore for now** — [several enquiries at once](task-extra-07-batch-enquiries.md) (designed, deferred for time; tracked as extra-07) | on hold |
 | foundry-05 | [Quotation Policy grounding](task-foundry-05-policy-grounding.md) | todo |
@@ -26,11 +26,9 @@ fork's equivalent of that project's `docs/SPEC.md` — the plan each task file i
 | foundry-07 | [Evaluation](task-foundry-07-evaluation.md) | todo |
 | foundry-08 | [Video and document](task-foundry-08-submission.md) | todo |
 
-**Carry-over fixes from the foundry-03 code review — do these at the start of `foundry-04`** (its photo
-intake depends on them; also listed in that task file's "Start here" section): `verify_catalogue_term` (1) cannot recognise a misspelt word ("tming belt",
-"spindel tap") because it only accepts exact whole-word matches — suggest the closest catalogue word
-within a small edit distance instead; (2) reports family names such as "SpindleTapes" as unknown,
-because recall searches only SKU and name. Fix (1) with a catalogue vocabulary and it covers (2).
+**Carry-over fixes from the foundry-03 code review — done in `foundry-04`:** `verify_catalogue_term` now
+suggests the closest catalogue phrases for a misspelling, and recognises family names such as
+"SpindleTapes".
 
 ## Extras — only after the whole plan above is done
 

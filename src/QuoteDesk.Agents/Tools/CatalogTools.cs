@@ -40,6 +40,16 @@ public sealed class CatalogTools(ICatalogRepository catalog)
     /// <summary>At most this many example names leave <see cref="VerifyCatalogueTermAsync"/>.</summary>
     private const int MaxExampleNames = 3;
 
+    /// <summary>A term with more meaningful words than this gets no spelling suggestions.</summary>
+    private const int MaxSuggestionWords = 4;
+
+    /// <summary>A term longer than this many characters gets no spelling suggestions.</summary>
+    private const int MaxSuggestionTermLength = 64;
+
+    /// <summary>How many partial readings survive each word position while suggestions are built —
+    /// keeps the work linear in the number of words instead of a full cartesian product.</summary>
+    private const int ReadingBeamWidth = 20;
+
     /// <summary>Generic words that carry no signal about which item is meant — dropped from both the
     /// search terms and the score.</summary>
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
@@ -196,7 +206,9 @@ public sealed class CatalogTools(ICatalogRepository catalog)
         "Checks whether a word or short phrase from the enquiry is a real term in the machinery-spares " +
         "catalogue — use it only when a word is unclear, misspelt or illegible, never to identify a " +
         "part. Returns whether the term is known, which product families it appears in, and up to " +
-        "three example item names. It never returns a part number or a price.")]
+        "three example item names. When the term is not known, suggestions lists up to three close " +
+        "spellings that are real catalogue phrases — treat them as possible readings, not as a " +
+        "confirmed answer. It never returns a part number or a price.")]
     public async Task<CatalogueTermCheck> VerifyCatalogueTermAsync(
         [Description("The unclear word or short phrase, exactly as you read it.")] string term,
         CancellationToken cancellationToken)
@@ -209,21 +221,161 @@ public sealed class CatalogTools(ICatalogRepository catalog)
             return new CatalogueTermCheck { Term = term, Known = false, Families = [], ExampleNames = [] };
         }
 
-        // Recall with one cheap substring lookup on the longest word (the most selective), then confirm
-        // with whole-word matching of every word — the same two-stage shape as search_catalog, so
-        // "ring" is not "known" just because it sits inside "bearing".
-        var recall = await catalog.SearchAsync(words.MaxBy(w => w.Length)!, cancellationToken);
-        var matches = recall
-            .Where(item => words.All(ItemWordsOf(item).Contains))
+        // The whole catalogue is a few hundred rows, so one read gives both whole-word matching over
+        // every field (a family name such as "SpindleTapes" appears in no SKU or name, so a substring
+        // recall over those missed it) and the vocabulary a misspelling is corrected against.
+        var items = await catalog.GetAllAsync(cancellationToken);
+        var itemWords = items.Select(i => (Item: i, Words: ItemWordsOf(i))).ToList();
+
+        var matches = MatchingAll(itemWords, words);
+        if (matches.Count > 0)
+        {
+            return TermCheck(term, known: true, matches, suggestions: []);
+        }
+
+        // The tool is for one unclear word or a short phrase. A longer term is not a misspelling to
+        // correct, and the term is model- and customer-controlled, so the spelling search is not
+        // attempted for it at all.
+        if (words.Count > MaxSuggestionWords || term.Length > MaxSuggestionTermLength)
+        {
+            return TermCheck(term, known: false, [], suggestions: []);
+        }
+
+        var suggestions = SuggestReadings(words, itemWords, cancellationToken);
+        var suggested = suggestions
+            .SelectMany(s => MatchingAll(itemWords, s))
+            .DistinctBy(i => i.Sku)
             .ToList();
 
-        return new CatalogueTermCheck
+        return TermCheck(
+            term,
+            known: false,
+            suggested,
+            [.. suggestions.Select(s => string.Join(' ', s).ToLowerInvariant())]);
+    }
+
+    private static List<CatalogItemRecord> MatchingAll(
+        List<(CatalogItemRecord Item, HashSet<string> Words)> itemWords, IReadOnlyList<string> words) =>
+        [.. itemWords.Where(x => words.All(x.Words.Contains)).Select(x => x.Item)];
+
+    private static CatalogueTermCheck TermCheck(
+        string term, bool known, List<CatalogItemRecord> items, IReadOnlyList<string> suggestions) =>
+        new()
         {
             Term = term,
-            Known = matches.Count > 0,
-            Families = [.. matches.Select(i => i.Category).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)],
-            ExampleNames = [.. matches.Select(i => i.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(MaxExampleNames)],
+            Known = known,
+            Families = [.. items.Select(i => i.Category).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)],
+            ExampleNames = [.. items.Select(i => i.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(MaxExampleNames)],
+            Suggestions = suggestions,
         };
+
+    /// <summary>
+    /// Readings of an unknown term that are real catalogue phrases. Each word the catalogue does not
+    /// know is swapped for vocabulary words within a small edit distance; a reading counts only if all
+    /// its words appear together in at least one item, so "PV belt" can become "PU belt" but never
+    /// "PU bearing". Ranked by total edits, then alphabetically, capped at three. Readings are built one
+    /// word at a time as a bounded beam: a partial reading whose words no item shares is dropped at
+    /// once, and only the best <see cref="ReadingBeamWidth"/> survive each position.
+    /// </summary>
+    private static List<string[]> SuggestReadings(
+        IReadOnlyList<string> words,
+        List<(CatalogItemRecord Item, HashSet<string> Words)> itemWords,
+        CancellationToken cancellationToken)
+    {
+        // Vocabulary: letter-only words from names, families and attributes — never the SKU, so a
+        // suggestion can never carry a part-number fragment like "VBLT".
+        var vocabulary = itemWords
+            .SelectMany(x => Tokenize($"{x.Item.Name} {x.Item.Category} {x.Item.Attributes}"))
+            .Where(w => w.Length >= 2 && w.All(char.IsLetter) && !StopWords.Contains(w))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allWords = itemWords.SelectMany(x => x.Words).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Items containing every word the catalogue already knows ("belt" in "PV belt"). A spelling
+        // that appears in none of them cannot form a real reading, so it is dropped before the
+        // per-word cap below — otherwise closer-but-impossible spellings could crowd out the one that
+        // fits (code review, foundry-04).
+        var knownWords = words.Where(allWords.Contains).ToList();
+        var itemsWithKnownWords = itemWords.Where(x => knownWords.All(x.Words.Contains)).ToList();
+
+        // Each position: the word itself if the catalogue knows it, otherwise its closest spellings.
+        var options = new List<List<(string Word, int Edits)>>();
+        foreach (var word in words)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (allWords.Contains(word))
+            {
+                options.Add([(word, 0)]);
+                continue;
+            }
+
+            // A number is a spec, not a spelling: "6211" one edit from "6201" is a different part.
+            if (!word.All(char.IsLetter))
+            {
+                return [];
+            }
+
+            var budget = word.Length <= 5 ? 1 : 2;
+            var close = vocabulary
+                .Select(v => (Word: v, Edits: EditDistance(word, v)))
+                .Where(c => c.Edits <= budget && itemsWithKnownWords.Any(x => x.Words.Contains(c.Word)))
+                .OrderBy(c => c.Edits)
+                .ThenBy(c => c.Word, StringComparer.Ordinal)
+                .Take(MaxCandidates)
+                .ToList();
+            if (close.Count == 0)
+            {
+                return [];
+            }
+
+            options.Add(close);
+        }
+
+        List<(string[] Words, int Edits)> readings = [([], 0)];
+        foreach (var position in options)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            readings = BestReadings(
+                readings
+                    .SelectMany(r => position.Select(o => (Words: r.Words.Append(o.Word).ToArray(), Edits: r.Edits + o.Edits)))
+                    .Where(r => itemWords.Any(x => r.Words.All(x.Words.Contains))),
+                ReadingBeamWidth);
+        }
+
+        return [.. BestReadings(readings.Where(r => r.Edits > 0), MaxExampleNames).Select(r => r.Words)];
+    }
+
+    private static List<(string[] Words, int Edits)> BestReadings(IEnumerable<(string[] Words, int Edits)> readings, int count) =>
+        [.. readings
+            .OrderBy(r => r.Edits)
+            .ThenBy(r => string.Join(' ', r.Words), StringComparer.Ordinal)
+            .Take(count)];
+
+    /// <summary>Levenshtein distance by ordinal character comparison. Both inputs are already
+    /// normalised (upper-cased) tokens, which is what makes it effectively case-insensitive.</summary>
+    private static int EditDistance(string a, string b)
+    {
+        var previous = new int[b.Length + 1];
+        var current = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++)
+        {
+            previous[j] = j;
+        }
+
+        for (var i = 1; i <= a.Length; i++)
+        {
+            current[0] = i;
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var substitution = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
+                current[j] = Math.Min(substitution, Math.Min(previous[j] + 1, current[j - 1] + 1));
+            }
+
+            (previous, current) = (current, previous);
+        }
+
+        return previous[b.Length];
     }
 
     /// <summary>Query + hint words, normalised, with stop-words removed. Single-character tokens are

@@ -17,6 +17,11 @@ import { navigate } from '../routing/useHashRoute'
  * router in `App`, so switching to Approvals and back can never unmount it and throw the run away.
  * Mirrored to `sessionStorage` so a browser refresh keeps the enquiry text and the trace too.
  *
+ * The draft photo is the one deliberate exception: held in memory only, never persisted. A
+ * downscaled photo is still a few hundred KB of base64; writing it to `sessionStorage` risks the
+ * ~5 MB quota and losing the whole session's trace. A refresh losing a pending photo is the honest
+ * trade — once submitted, the server has its own copy for Retry.
+ *
  * Clearing rule: nothing here is wiped on navigation, on a failed run, or on a rejected decision.
  * It clears only when the user presses New enquiry (`reset`) or a run completes through an approve.
  */
@@ -28,9 +33,15 @@ interface DeskSession {
   draftSender: string
   setDraftBody: (value: string) => void
   setDraftSender: (value: string) => void
+  /** The photo attached to the draft, as a downscaled JPEG data URL. In memory only. */
+  draftImage: string | null
+  setDraftImage: (value: string | null) => void
 
   /** The enquiry the live stream currently pertains to, or null for a blank desk. */
   activeEnquiryId: number | null
+  /** Whether the active enquiry was sent with a photo. Persisted (a flag, never the image), so after
+   * a refresh the Desk knows a photo exists even though `draftImage` is gone. */
+  activeHasImage: boolean
   decided: Decision | null
   setDecided: (decision: Decision | null) => void
 
@@ -58,6 +69,7 @@ interface PersistedSession {
   draftBody: string
   draftSender: string
   activeEnquiryId: number | null
+  activeHasImage: boolean
   decided: Decision | null
   events: AgentEvent[]
 }
@@ -67,6 +79,7 @@ function loadPersisted(): PersistedSession {
     draftBody: '',
     draftSender: '',
     activeEnquiryId: null,
+    activeHasImage: false,
     decided: null,
     events: [],
   }
@@ -78,6 +91,7 @@ function loadPersisted(): PersistedSession {
       draftBody: typeof parsed.draftBody === 'string' ? parsed.draftBody : '',
       draftSender: typeof parsed.draftSender === 'string' ? parsed.draftSender : '',
       activeEnquiryId: typeof parsed.activeEnquiryId === 'number' ? parsed.activeEnquiryId : null,
+      activeHasImage: parsed.activeHasImage === true,
       decided: parsed.decided === 'approve' || parsed.decided === 'reject' ? parsed.decided : null,
       events: Array.isArray(parsed.events) ? (parsed.events as AgentEvent[]) : [],
     }
@@ -107,7 +121,10 @@ export function DeskSessionProvider({ children }: { children: ReactNode }) {
 
   const [draftBody, setDraftBody] = useState(restored.draftBody)
   const [draftSender, setDraftSender] = useState(restored.draftSender)
+  // Deliberately not in PersistedSession — see the note at the top of this file.
+  const [draftImage, setDraftImage] = useState<string | null>(null)
   const [activeEnquiryId, setActiveEnquiryId] = useState<number | null>(restored.activeEnquiryId)
+  const [activeHasImage, setActiveHasImage] = useState(restored.activeHasImage)
   const [decided, setDecided] = useState<Decision | null>(restored.decided)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -122,22 +139,24 @@ export function DeskSessionProvider({ children }: { children: ReactNode }) {
 
   // Mirror the whole session to sessionStorage whenever any of it changes.
   useEffect(() => {
-    savePersisted({ draftBody, draftSender, activeEnquiryId, decided, events: stream.events })
-  }, [draftBody, draftSender, activeEnquiryId, decided, stream.events])
+    savePersisted({ draftBody, draftSender, activeEnquiryId, activeHasImage, decided, events: stream.events })
+  }, [draftBody, draftSender, activeEnquiryId, activeHasImage, decided, stream.events])
 
   const { process: startProcess, reset: resetStream } = stream
 
   const submitDraft = useCallback(async () => {
-    if (draftBody.trim().length === 0) return
+    if (draftBody.trim().length === 0 && draftImage === null) return
     setSubmitting(true)
     setSubmitError(null)
     try {
       const created = await createEnquiry({
         body: draftBody.trim(),
         senderId: draftSender.trim() || undefined,
+        imageDataUrl: draftImage ?? undefined,
       })
       setDecided(null)
       setActiveEnquiryId(created.enquiryId)
+      setActiveHasImage(draftImage !== null)
       startProcess(created.enquiryId)
       navigate({ name: 'desk', enquiryId: created.enquiryId })
     } catch (err) {
@@ -145,7 +164,7 @@ export function DeskSessionProvider({ children }: { children: ReactNode }) {
     } finally {
       setSubmitting(false)
     }
-  }, [draftBody, draftSender, startProcess])
+  }, [draftBody, draftSender, draftImage, startProcess])
 
   const retry = useCallback(() => {
     if (activeEnquiryId === null) return
@@ -157,6 +176,7 @@ export function DeskSessionProvider({ children }: { children: ReactNode }) {
     (body: string) => {
       resetStream()
       setActiveEnquiryId(null)
+      setActiveHasImage(false)
       setDecided(null)
       setDraftBody(body)
       navigate({ name: 'desk', enquiryId: null })
@@ -167,9 +187,11 @@ export function DeskSessionProvider({ children }: { children: ReactNode }) {
   const reset = useCallback(() => {
     resetStream()
     setActiveEnquiryId(null)
+    setActiveHasImage(false)
     setDecided(null)
     setDraftBody('')
     setDraftSender('')
+    setDraftImage(null)
     navigate({ name: 'desk', enquiryId: null })
   }, [resetStream])
 
@@ -179,7 +201,10 @@ export function DeskSessionProvider({ children }: { children: ReactNode }) {
       draftSender,
       setDraftBody,
       setDraftSender,
+      draftImage,
+      setDraftImage,
       activeEnquiryId,
+      activeHasImage,
       decided,
       setDecided,
       stream,
@@ -193,7 +218,9 @@ export function DeskSessionProvider({ children }: { children: ReactNode }) {
     [
       draftBody,
       draftSender,
+      draftImage,
       activeEnquiryId,
+      activeHasImage,
       decided,
       stream,
       submitting,

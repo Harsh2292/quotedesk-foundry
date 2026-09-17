@@ -45,10 +45,18 @@ public sealed class LlmOptions
 
     /// <summary>Model for the Intake stage — messy text (or a photo, foundry-04) into JSON, no
     /// judgement calls beyond checking an unclear term against the catalogue. Falls back to
-    /// <see cref="Model"/>. docs/FOUNDRY-PLAN.md Step 0: routed to the cheap, vision-capable
-    /// <c>gpt-5-nano</c> since nothing here is worth the capable model's scarce quota. Renamed from
+    /// <see cref="Model"/>. docs/FOUNDRY-PLAN.md Step 0: routed to the cheap <c>gpt-5-nano</c> for
+    /// typed text; a photo enquiry uses <see cref="IntakeImageModel"/> instead. Renamed from
     /// <c>ExtractModel</c> in task foundry-02; the executor and stage followed in foundry-03.</summary>
     public string? IntakeModel { get; init; }
+
+    /// <summary>Model for the Intake stage when the enquiry carries a photo. Falls back to
+    /// <see cref="IntakeModel"/>. Split out in foundry-04: reading real handwriting is a different job
+    /// from structuring typed text. Live on a messy handwritten, mixed Gujarati-English list,
+    /// <c>gpt-5-nano</c> got one quantity and no full specification right and invented a qualifier;
+    /// <c>gpt-5-mini</c> read far more correctly. Typed text stays on the cheaper model, which reads the
+    /// worked example correctly, so only photo enquiries pay for the capable one.</summary>
+    public string? IntakeImageModel { get; init; }
 
     /// <summary>Model for the Resolve stage — the one autonomous node: a tool-calling loop that has
     /// to weigh candidates and know when it genuinely cannot tell. Falls back to <see cref="Model"/>.

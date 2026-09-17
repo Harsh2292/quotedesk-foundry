@@ -42,6 +42,9 @@ internal sealed class FakeCatalogRepository : ICatalogRepository
 
     public Task<IReadOnlyList<CatalogItemRecord>> GetByCategoryAsync(string category, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<CatalogItemRecord>>([.. Items.Where(i => i.Category == category)]);
+
+    public Task<IReadOnlyList<CatalogItemRecord>> GetAllAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<CatalogItemRecord>>([.. Items.OrderBy(i => i.Sku, StringComparer.Ordinal)]);
 }
 
 internal sealed class FakeStockRepository : IStockRepository

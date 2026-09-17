@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { ApprovalRequest, PricedQuoteLine } from '../api/types'
 import { money, percent, shortDate } from '../lib/format'
 import { cn } from '../lib/cn'
+import { EnquiryPhoto } from './EnquiryPhoto'
 import { Badge, Button, Card, Eyebrow, Mono, Spinner, StatusDot } from './ui'
 
 /**
@@ -83,6 +84,8 @@ export function ApprovalCard({
         </div>
         <p className="mt-2.5 text-[12.5px] leading-relaxed text-slate-600">{request.narration}</p>
       </div>
+
+      <EnquiryPhoto enquiryId={request.enquiryId} />
 
       <table className="w-full border-collapse text-[12px]">
         <thead>

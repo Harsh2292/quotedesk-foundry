@@ -43,6 +43,10 @@ public sealed class ChatClientRegistry
 
     public IChatClient Intake => GetOrCreate(_options.IntakeModel ?? _options.Model);
 
+    /// <summary>Intake's client for an enquiry with a photo — <see cref="LlmOptions.IntakeImageModel"/>,
+    /// falling back to the text Intake model. Same cache, so two settings naming one model share a client.</summary>
+    public IChatClient IntakeImage => GetOrCreate(_options.IntakeImageModel ?? _options.IntakeModel ?? _options.Model);
+
     public IChatClient Resolve => GetOrCreate(_options.ResolveModel ?? _options.Model);
 
     public IChatClient Narrate => GetOrCreate(_options.NarrateModel ?? _options.Model);

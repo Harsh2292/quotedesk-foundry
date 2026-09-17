@@ -25,14 +25,30 @@ public static partial class StructuredModelCall
 {
     private static readonly JsonSerializerOptions SchemaOptions = new(JsonSerializerDefaults.Web);
 
-    public static async Task<T> RunAsync<T>(
+    public static Task<T> RunAsync<T>(
         AIAgent agent,
         string prompt,
         bool useSchema,
         ILogger logger,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(prompt);
+        return RunAsync<T>(agent, new ChatMessage(ChatRole.User, prompt), useSchema, logger, cancellationToken);
+    }
+
+    /// <summary>The same call with a full <see cref="ChatMessage"/> — for a prompt that carries more
+    /// than text, such as a photographed enquiry's <see cref="DataContent"/> (foundry-04). The retry
+    /// keeps every original content item and appends the parse error as one more text item, so a
+    /// retried image enquiry still sends the image.</summary>
+    public static async Task<T> RunAsync<T>(
+        AIAgent agent,
+        ChatMessage prompt,
+        bool useSchema,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(agent);
+        ArgumentNullException.ThrowIfNull(prompt);
         ArgumentNullException.ThrowIfNull(logger);
 
         var schemaAccepted = useSchema;
@@ -56,9 +72,7 @@ public static partial class StructuredModelCall
         {
             LogParseFailureRetrying(logger, parseFailure, typeof(T).Name);
 
-            var corrective = $"""
-                {prompt}
-
+            var correction = $"""
                 ---
                 Your previous reply could not be used. It failed with:
 
@@ -67,6 +81,7 @@ public static partial class StructuredModelCall
                 Reply again with only the JSON object this task requires — no prose before or after it,
                 no code fence, and every required field present.
                 """;
+            var corrective = new ChatMessage(prompt.Role, [.. prompt.Contents, new TextContent(correction)]);
 
             var retry = await agent.RunAsync(
                 corrective, session: null, options: SchemaOptionsFor<T>(schemaAccepted), cancellationToken);

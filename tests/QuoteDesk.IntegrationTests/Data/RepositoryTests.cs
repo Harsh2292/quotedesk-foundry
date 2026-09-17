@@ -1,4 +1,5 @@
 using FluentAssertions;
+using QuoteDesk.Data;
 using QuoteDesk.Domain;
 
 namespace QuoteDesk.IntegrationTests.Data;
@@ -43,6 +44,29 @@ public class RepositoryTests(RepositoryFixture fixture)
         var results = await fixture.Catalog.SearchAsync("6203", CancellationToken.None);
 
         results.Select(r => r.Sku).Should().Contain("BRG-6203-2RS");
+    }
+
+    [Fact]
+    public async Task Catalog_GetAll_ReturnsEveryFamily()
+    {
+        var items = await fixture.Catalog.GetAllAsync(CancellationToken.None);
+
+        items.Select(i => i.Category).Distinct().Should().BeEquivalentTo("Bearings", "Belts", "SpindleTapes", "Gears");
+        items.Should().Contain(i => i.Sku == "BRG-6203-2RS");
+    }
+
+    [Fact]
+    public async Task Enquiries_GetImageDataUrl_ReturnsTheStoredImageOrNull()
+    {
+        const string dataUrl = "data:image/png;base64,iVBORw0KGgo=";
+        var withImage = await fixture.Enquiries.CreateAsync(
+            new NewEnquiry("Paste", "photo@example.com", string.Empty, DateTimeOffset.UnixEpoch, CustomerId: null, "pending", dataUrl), CancellationToken.None);
+        var textOnly = await fixture.Enquiries.CreateAsync(
+            new NewEnquiry("Paste", "text@example.com", "50 pcs bearing", DateTimeOffset.UnixEpoch, CustomerId: null, "pending"), CancellationToken.None);
+
+        (await fixture.Enquiries.GetImageDataUrlAsync(withImage, CancellationToken.None)).Should().Be(dataUrl);
+        (await fixture.Enquiries.GetImageDataUrlAsync(textOnly, CancellationToken.None)).Should().BeNull();
+        (await fixture.Enquiries.GetImageDataUrlAsync(int.MaxValue, CancellationToken.None)).Should().BeNull();
     }
 
     [Fact]

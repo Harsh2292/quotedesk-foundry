@@ -18,5 +18,10 @@ public class Enquiry
 
     public required string Status { get; set; }
 
+    /// <summary>A photographed enquiry, as a <c>data:image/...;base64,...</c> URL (foundry-04). Stored
+    /// because the image arrives on <c>POST /api/enquiries</c> but is read on the separate
+    /// <c>/process</c> request, and a Retry must be able to read it again. Null for text-only enquiries.</summary>
+    public string? ImageDataUrl { get; set; }
+
     public Customer? Customer { get; set; }
 }

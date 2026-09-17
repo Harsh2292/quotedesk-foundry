@@ -23,14 +23,29 @@ public sealed class PasteAdapter(IEnquiryRepository enquiries) : IEnquiryIntakeA
             ReceivedAt = receivedAt,
         };
 
+    /// <summary>A pasted enquiry with a photo — the body may be blank when the photo is the whole
+    /// enquiry. The caller validates the image first with <see cref="PastedImage.TryParse"/> to shape a
+    /// 400; an invalid one reaching here is a programming error and throws.</summary>
+    public static IncomingEnquiry FromPastedTextAndImage(
+        string senderId, string body, string imageDataUrl, DateTimeOffset receivedAt)
+    {
+        if (!PastedImage.TryParse(imageDataUrl, out var image, out var error))
+        {
+            throw new ArgumentException(error, nameof(imageDataUrl));
+        }
+
+        return FromPastedText(senderId, body, receivedAt) with { Attachments = [image] };
+    }
+
     public async Task<EnquiryIntakeResult> IngestAsync(IncomingEnquiry enquiry, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(enquiry);
 
         var status = EnquiryStatusRule.Resolve(enquiry);
+        var image = enquiry.Attachments.FirstOrDefault(a => a.IsReadableImage);
 
         var id = await enquiries.CreateAsync(
-            new NewEnquiry(Channel.ToString(), enquiry.SenderId, enquiry.Body, enquiry.ReceivedAt, CustomerId: null, status),
+            new NewEnquiry(Channel.ToString(), enquiry.SenderId, enquiry.Body, enquiry.ReceivedAt, CustomerId: null, status, image?.DataUrl),
             cancellationToken);
 
         return new EnquiryIntakeResult(id, status);

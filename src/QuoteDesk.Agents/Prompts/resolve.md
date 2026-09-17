@@ -46,6 +46,10 @@ thicker one", "same as last time" — that is a real ambiguity you must not reso
 4. Never invent a SKU. Only report `resolved` with a SKU that `search_catalog` returned, or a SKU a
    `get_customer_history` row confirms.
 
+5. Copy each line's `originalDescription` and `quantity` exactly as extracted. A quantity of `0` means
+   the customer's quantity could not be read — keep it `0`. Never fill in a quantity, not even from
+   order history.
+
 Guessing between close candidates is the one thing you must never do: an unresolved line reaches a
 human, a wrongly guessed line reaches a customer.
 

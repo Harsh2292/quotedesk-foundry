@@ -8,6 +8,10 @@ public interface IEnquiryRepository
 
     Task<int> CreateAsync(NewEnquiry enquiry, CancellationToken cancellationToken);
 
+    /// <summary>Only the stored photo's data URL (foundry-04), or null when the enquiry has none or does
+    /// not exist — a dedicated read so serving the photo never loads anything else.</summary>
+    Task<string?> GetImageDataUrlAsync(int id, CancellationToken cancellationToken);
+
     /// <summary>Writes back the customer Resolve identified, once a human has approved the quote
     /// built against it. An enquiry is created with <c>CustomerId: null</c> (task 04's <c>PasteAdapter</c>
     /// never knows the customer at intake time) and nothing wrote it afterward until task 09's live

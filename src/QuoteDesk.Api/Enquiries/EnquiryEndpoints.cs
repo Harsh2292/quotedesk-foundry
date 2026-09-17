@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using QuoteDesk.Agents.Pipeline;
 using QuoteDesk.Api.Streaming;
 using QuoteDesk.Data.Repositories;
@@ -8,7 +9,10 @@ using QuoteDesk.Intake;
 
 namespace QuoteDesk.Api.Enquiries;
 
-public sealed record PasteEnquiryRequest(string Body, string? SenderId);
+/// <summary>A pasted enquiry. <paramref name="ImageDataUrl"/> is an optional photo of it as a
+/// <c>data:image/...;base64,...</c> URL (foundry-04) — riding this JSON POST rather than a multipart
+/// upload; with a photo, <paramref name="Body"/> may be blank.</summary>
+public sealed record PasteEnquiryRequest(string Body, string? SenderId, string? ImageDataUrl = null);
 
 public sealed record EnquiryCreatedResponse(int EnquiryId, string Status);
 
@@ -29,17 +33,25 @@ public sealed record EnquiryDetailResponse(
 
 public static class EnquiryEndpoints
 {
+    /// <summary>The largest request body <c>POST /api/enquiries</c> accepts, in bytes: a 2 MB image is
+    /// ~2.8 MB once base64-encoded, plus the pasted text and JSON framing. Kestrel answers anything
+    /// bigger with 413 before the body is buffered, instead of its 30 MB server-wide default.</summary>
+    public const long MaxPasteRequestBytes = 3_500_000;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public static IEndpointRouteBuilder MapEnquiryEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/enquiries");
 
-        group.MapPost("/", CreateFromPasteAsync);
+        // RequestSizeLimitAttribute is IRequestSizeLimitMetadata, which endpoint routing applies to
+        // minimal APIs too (not only MVC) by setting IHttpMaxRequestBodySizeFeature for the request.
+        group.MapPost("/", CreateFromPasteAsync).WithMetadata(new RequestSizeLimitAttribute(MaxPasteRequestBytes));
         // "pipeline" is a hard, demo-wide daily cap stacked on top of the app-wide GlobalLimiter
         // (Program.cs) — this is the one route that spends the shared Gemini key.
         group.MapPost("/{id:int}/process", ProcessAsync).RequireRateLimiting("pipeline");
         group.MapGet("/{id:int}", GetByIdAsync);
+        group.MapGet("/{id:int}/image", GetImageAsync);
 
         return app;
     }
@@ -51,12 +63,18 @@ public static class EnquiryEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        // A blank body with nothing attached is a client bug (an empty textarea submit), not a
-        // business case — reject it outright. A blank body that *does* carry attachments is the
-        // real needs_manual_entry case, handled once channels that can attach files exist (task 10).
-        if (string.IsNullOrWhiteSpace(request.Body))
+        // A blank body with no photo is a client bug (an empty textarea submit), not a business case —
+        // reject it outright. A photo on its own is a real enquiry: the Intake agent reads it.
+        var imageDataUrl = string.IsNullOrWhiteSpace(request.ImageDataUrl) ? null : request.ImageDataUrl;
+        if (string.IsNullOrWhiteSpace(request.Body) && imageDataUrl is null)
         {
             return TypedResults.Problem("Body must not be empty.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // Checked before anything touches the database: type, base64 shape and the ~2 MB cap.
+        if (imageDataUrl is not null && !PastedImage.TryParse(imageDataUrl, out _, out var imageError))
+        {
+            return TypedResults.Problem(imageError, statusCode: StatusCodes.Status400BadRequest);
         }
 
         // MapInboundClaims is disabled in Program.cs, so "email" comes through exactly as JwtIssuer
@@ -67,7 +85,10 @@ public static class EnquiryEndpoints
             return TypedResults.Problem("SenderId was not supplied and the token carries no email claim.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var enquiry = PasteAdapter.FromPastedText(senderId, request.Body, timeProvider.GetUtcNow());
+        var body = request.Body ?? string.Empty;
+        var enquiry = imageDataUrl is not null
+            ? PasteAdapter.FromPastedTextAndImage(senderId, body, imageDataUrl, timeProvider.GetUtcNow())
+            : PasteAdapter.FromPastedText(senderId, body, timeProvider.GetUtcNow());
         var result = await adapter.IngestAsync(enquiry, cancellationToken);
 
         return TypedResults.Created(
@@ -105,6 +126,27 @@ public static class EnquiryEndpoints
             agentRuns,
             timeProvider,
             cancellationToken);
+    }
+
+    /// <summary>The enquiry's photo (foundry-04), so the approval card can show a human what the customer
+    /// actually wrote next to what Intake read from it. Kept out of <see cref="EnquiryDetailResponse"/>,
+    /// which is fetched on every Desk navigation. Behind the same fallback authorization policy as every
+    /// other route; never cached, and served with <c>nosniff</c> so a browser cannot reinterpret it.</summary>
+    private static async Task<Results<FileContentHttpResult, ProblemHttpResult>> GetImageAsync(
+        int id,
+        HttpContext context,
+        IEnquiryRepository enquiries,
+        CancellationToken cancellationToken)
+    {
+        var dataUrl = await enquiries.GetImageDataUrlAsync(id, cancellationToken);
+        if (dataUrl is null || !PastedImage.TryDecode(dataUrl, out var mediaType, out var content))
+        {
+            return TypedResults.Problem($"Enquiry {id} has no photo.", statusCode: StatusCodes.Status404NotFound);
+        }
+
+        context.Response.Headers.CacheControl = "no-store, private";
+        context.Response.Headers.XContentTypeOptions = "nosniff";
+        return TypedResults.File(content, mediaType);
     }
 
     private static async Task<Results<Ok<EnquiryDetailResponse>, ProblemHttpResult>> GetByIdAsync(

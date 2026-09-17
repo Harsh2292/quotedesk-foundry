@@ -69,7 +69,8 @@ public sealed record EnquiryRecord(
     string RawBody,
     DateTimeOffset ReceivedAt,
     int? CustomerId,
-    string Status);
+    string Status,
+    string? ImageDataUrl = null);
 
 /// <summary>Everything needed to persist one freshly ingested enquiry. <c>Channel</c> and
 /// <c>Status</c> are plain strings here — the enum and status constants they came from belong to
@@ -80,7 +81,8 @@ public sealed record NewEnquiry(
     string RawBody,
     DateTimeOffset ReceivedAt,
     int? CustomerId,
-    string Status);
+    string Status,
+    string? ImageDataUrl = null);
 
 /// <summary>One line of a quote being created. <c>UnitPrice</c> is the already-discounted net price
 /// — the same rounding rule as <see cref="QuoteDesk.Domain.PricedLine.NetUnitPrice"/> — never a list

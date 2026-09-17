@@ -9,4 +9,8 @@ public interface ICatalogRepository
     Task<CatalogItemRecord?> GetBySkuAsync(string sku, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<CatalogItemRecord>> GetByCategoryAsync(string category, CancellationToken cancellationToken);
+
+    /// <summary>Every catalogue item, ordered by SKU. The catalogue is a few hundred rows, so this is
+    /// cheap; it backs <c>verify_catalogue_term</c>'s vocabulary of real catalogue words.</summary>
+    Task<IReadOnlyList<CatalogItemRecord>> GetAllAsync(CancellationToken cancellationToken);
 }

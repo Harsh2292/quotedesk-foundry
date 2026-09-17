@@ -4,8 +4,12 @@ using QuoteDesk.Agents.Tools.Results;
 namespace QuoteDesk.Agents.Pipeline;
 
 /// <summary>What starts a pipeline run — the plain fields off <c>Enquiry</c>, not the entity itself
-/// (QuoteDesk.Data entities never leave that project).</summary>
-public sealed record EnquiryInput(int EnquiryId, string SenderId, string RawBody, DateTimeOffset ReceivedAt);
+/// (QuoteDesk.Data entities never leave that project). <paramref name="ImageDataUrl"/> is a
+/// photographed enquiry (foundry-04). This record is embedded in every downstream message and each of
+/// those is checkpointed on every superstep, so <see cref="IntakeExecutor"/> strips the image the
+/// moment it has been read — nothing after Intake ever carries it.</summary>
+public sealed record EnquiryInput(
+    int EnquiryId, string SenderId, string RawBody, DateTimeOffset ReceivedAt, string? ImageDataUrl = null);
 
 /// <summary>One line as the customer wrote it, before anything has been resolved.</summary>
 public sealed record ExtractedLine

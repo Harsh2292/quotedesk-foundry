@@ -101,6 +101,50 @@ public class PasteAdapterTests
     }
 
     [Fact]
+    public void FromPastedTextAndImage_ValidImage_AttachesItWithItsData()
+    {
+        var enquiry = PasteAdapter.FromPastedTextAndImage("sender@example.com", "  see photo \r\n", PastedImageTests.SmallPngDataUrl, ReceivedAt);
+
+        enquiry.Body.Should().Be("see photo");
+        enquiry.Channel.Should().Be(EnquiryChannel.Paste);
+        enquiry.Attachments.Should().ContainSingle().Which.DataUrl.Should().Be(PastedImageTests.SmallPngDataUrl);
+    }
+
+    [Fact]
+    public void FromPastedTextAndImage_InvalidImage_Throws()
+    {
+        var act = () => PasteAdapter.FromPastedTextAndImage("sender@example.com", string.Empty, "data:text/plain;base64,aGVsbG8=", ReceivedAt);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task IngestAsync_ImageOnlyEnquiry_StoresAsPendingWithTheImage()
+    {
+        var repository = new FakeEnquiryRepository();
+        var adapter = new PasteAdapter(repository);
+        var enquiry = PasteAdapter.FromPastedTextAndImage("sender@example.com", string.Empty, PastedImageTests.SmallPngDataUrl, ReceivedAt);
+
+        var result = await adapter.IngestAsync(enquiry, CancellationToken.None);
+
+        // A photo the model can read is a real enquiry, not a manual-entry case.
+        result.Status.Should().Be(EnquiryStatus.Pending);
+        repository.Stored.Single().ImageDataUrl.Should().Be(PastedImageTests.SmallPngDataUrl);
+    }
+
+    [Fact]
+    public async Task IngestAsync_TextOnlyEnquiry_StoresNoImage()
+    {
+        var repository = new FakeEnquiryRepository();
+        var adapter = new PasteAdapter(repository);
+        var enquiry = PasteAdapter.FromPastedText("sender@example.com", "50 pcs bearing 6203", ReceivedAt);
+
+        await adapter.IngestAsync(enquiry, CancellationToken.None);
+
+        repository.Stored.Single().ImageDataUrl.Should().BeNull();
+    }
+
+    [Fact]
     public void Channel_Always_IsPaste()
     {
         var adapter = new PasteAdapter(new FakeEnquiryRepository());

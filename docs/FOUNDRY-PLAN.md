@@ -264,7 +264,13 @@ Rules: take whatever versions NuGet resolves and record them in `docs/SPEC.md` �
   unit tests for the tool (known term, unknown term, empty, whitespace); `PromptLibraryTests` for
   `intake.md`.
 
-### 4c. Image intake
+### 4c. Image intake — built 2026-09-17 (foundry-04); the crafted-photo demo check is still open
+
+Built as designed below; what was decided along the way is in `docs/SPEC.md` §5 and §7 and the task
+file's notes. Measured live on Foundry with a synthetic handwritten image: `gpt-5-nano` read every
+quantity correctly (3.8–7.2 s for the Intake call, ~3,000 input tokens), but did **not** call
+`verify_catalogue_term` on a cleanly written "PV" — the tool fires only when a word is genuinely hard to
+read, so the demo photo has to be genuinely ambiguous.
 
 The base64-over-JSON design:
 

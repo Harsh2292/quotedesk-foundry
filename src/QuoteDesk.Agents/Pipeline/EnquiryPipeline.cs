@@ -58,7 +58,7 @@ public sealed partial class EnquiryPipeline(
         var tokens = new TokenUsageTracker(options.TokenBudget);
         var workflow = BuildWorkflow(tokens);
         var checkpointManager = CheckpointManager.CreateJson(checkpointStore, JsonOptions);
-        var enquiryInput = new EnquiryInput(enquiry.Id, enquiry.SenderId, enquiry.RawBody, enquiry.ReceivedAt);
+        var enquiryInput = new EnquiryInput(enquiry.Id, enquiry.SenderId, enquiry.RawBody, enquiry.ReceivedAt, enquiry.ImageDataUrl);
 
         StreamingRun? streamingRun = null;
         ErrorEvent? startError = null;
@@ -263,10 +263,12 @@ public sealed partial class EnquiryPipeline(
         // docs/SPEC.md §4), all three sharing this run's one TokenUsageTracker so the budget is still
         // enforced per round-trip across every model in play, not per model.
         var intakeModel = options.IntakeModel ?? options.Model;
+        var intakeImageModel = options.IntakeImageModel ?? intakeModel;
         var resolveModel = options.ResolveModel ?? options.Model;
         var narrateModel = options.NarrateModel ?? options.Model;
 
         var intakeClient = new BudgetedChatClient(chatClients.Intake, tokens);
+        var intakeImageClient = new BudgetedChatClient(chatClients.IntakeImage, tokens);
         var resolveClient = new BudgetedChatClient(chatClients.Resolve, tokens);
         var narrateClient = new BudgetedChatClient(chatClients.Narrate, tokens);
 
@@ -313,7 +315,7 @@ public sealed partial class EnquiryPipeline(
         var resolveTools = ToolsNamed("resolve_customer", "get_customer_history", "search_catalog", "check_stock");
 
         return new WorkflowNodes(
-            new IntakeExecutor("Intake", intakeClient, intakeModel, intakeTools, prompts.Intake, lightReasoning, intakeIterations, intakeBudget, logger),
+            new IntakeExecutor("Intake", new IntakeModels(intakeClient, intakeModel, intakeImageClient, intakeImageModel), intakeTools, prompts.Intake, lightReasoning, intakeIterations, intakeBudget, logger),
             new ResolveExecutor("Resolve", resolveClient, resolveModel, resolveTools, prompts.Resolve, resolveIterations, toolBudget, catalog, customers, logger),
             new PriceExecutor("Price", pricingTools, narrateAgent, narrateModel),
             new ApproveExecutor("Approve", writeTools, quotes, timeProvider));

@@ -6,6 +6,7 @@ import type { AgentEvent } from '../api/agentEvents'
 import type { ApprovalRequest, PendingApprovalSummary } from '../api/types'
 import { useDeskSession } from '../desk/DeskSessionContext'
 import { SAMPLE_ENQUIRIES, type SampleEnquiry } from '../desk/sampleEnquiries'
+import { downscaleImage } from '../desk/downscaleImage'
 import { useAsync } from '../hooks/useAsync'
 import { navigate, type Route } from '../routing/useHashRoute'
 import { ApprovalCard } from '../components/ApprovalCard'
@@ -59,13 +60,16 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
             <textarea
               value={session.draftBody}
               onChange={(e) => session.setDraftBody(e.target.value)}
-              placeholder="Paste an enquiry — an email body, a WhatsApp message, or a customer's list…"
-              className="min-h-[320px] flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 p-3.5 font-mono text-[12px] leading-relaxed text-slate-700 placeholder:text-slate-300"
+              placeholder="Paste an enquiry — an email body, a WhatsApp message, or a customer's list… or attach a photo of it below."
+              className="min-h-[240px] flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 p-3.5 font-mono text-[12px] leading-relaxed text-slate-700 placeholder:text-slate-300"
             />
+            <PhotoPicker image={session.draftImage} onChange={session.setDraftImage} />
             <SampleEnquiryPicker
               onPick={(sample) => {
                 session.setDraftBody(sample.body)
                 session.setDraftSender(sample.sender)
+                // A sample is a typed enquiry — a photo left attached would be sent along with it.
+                session.setDraftImage(null)
               }}
             />
             <Field label="Sender · optional">
@@ -78,7 +82,10 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
             </Field>
             <Button
               onClick={() => void session.submitDraft()}
-              disabled={session.submitting || session.draftBody.trim().length === 0}
+              disabled={
+                session.submitting ||
+                (session.draftBody.trim().length === 0 && session.draftImage === null)
+              }
               className="self-start"
             >
               Process enquiry
@@ -101,6 +108,13 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
     const decideBusy = session.decided !== null && stream.phase === 'streaming'
     const decideDone = session.decided !== null && stream.phase === 'done'
     const failed = stream.phase === 'error'
+    // The photo lives in memory only, so after a refresh a photo-only enquiry has nothing left here to
+    // edit — Retry still works, because the server reads the image stored with the enquiry.
+    const hasDraft = session.draftBody.trim().length > 0 || session.draftImage !== null
+    // The enquiry was sent with a photo this tab no longer holds (a refresh). Re-running from the draft
+    // would silently drop the photo's lines, so only Retry — which reads the stored photo — is offered.
+    const photoNotInTab = session.activeHasImage && session.draftImage === null
+    const canEditAndRerun = hasDraft && !photoNotInTab
 
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -118,13 +132,15 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
                     >
                       Retry
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => session.editForRerun(session.draftBody)}
-                      className="text-[11.5px] font-medium text-slate-600 hover:text-slate-900"
-                    >
-                      Edit &amp; re-run
-                    </button>
+                    {canEditAndRerun && (
+                      <button
+                        type="button"
+                        onClick={() => session.editForRerun(session.draftBody)}
+                        className="text-[11.5px] font-medium text-slate-600 hover:text-slate-900"
+                      >
+                        Edit &amp; re-run
+                      </button>
+                    )}
                   </>
                 )}
                 <button
@@ -138,13 +154,25 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
             }
           >
             <div className="flex-1 overflow-y-auto p-5">
-              <pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3.5 font-mono text-[12px] leading-relaxed text-slate-700">
-                {session.draftBody}
-              </pre>
+              {session.draftBody.trim().length > 0 && (
+                <pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3.5 font-mono text-[12px] leading-relaxed text-slate-700">
+                  {session.draftBody}
+                </pre>
+              )}
+              {session.draftImage !== null && (
+                <img
+                  src={session.draftImage}
+                  alt="The photographed enquiry"
+                  className="mt-3 w-full rounded-lg border border-slate-200"
+                />
+              )}
+              {(!hasDraft || photoNotInTab) && <PhotoEnquiryNote />}
               {failed && (
                 <p className="mt-3 text-[12px] text-red-600">
-                  {stream.errorMessage ?? 'The run failed.'} Your enquiry text is kept — Retry runs it
-                  again, or Edit &amp; re-run to change it first.
+                  {stream.errorMessage ?? 'The run failed.'}{' '}
+                  {canEditAndRerun
+                    ? 'Your enquiry text is kept — Retry runs it again, or Edit & re-run to change it first.'
+                    : 'Retry runs it again.'}
                 </p>
               )}
             </div>
@@ -209,6 +237,8 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
           <div className="flex-1 overflow-y-auto p-5">
             {historical === null ? (
               <div className="text-[12px] text-slate-400">Loading enquiry…</div>
+            ) : historical.detail.rawBody.trim().length === 0 ? (
+              <PhotoEnquiryNote />
             ) : (
               <pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-3.5 font-mono text-[12px] leading-relaxed text-slate-700">
                 {historical.detail.rawBody}
@@ -253,11 +283,83 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
   )
 }
 
+/** Shown when the enquiry was sent with a photo that this tab no longer holds (e.g. after a refresh). */
+function PhotoEnquiryNote() {
+  return (
+    <p className="text-[12px] text-slate-400">
+      This enquiry was sent with a photo — it is stored with the enquiry; Retry reads it again.
+    </p>
+  )
+}
+
 function traceMeta(stream: ReturnType<typeof useDeskSession>['stream']): string | undefined {
   if (stream.phase === 'streaming') return `running · ${stream.events.length} events`
   if (stream.errorCode) return stream.errorMessage ?? 'error'
   if (stream.events.length > 0) return `${stream.events.length} events`
   return undefined
+}
+
+/**
+ * Attach one photo of the enquiry — a handwritten or printed list. Downscaled on a canvas before it
+ * reaches state, so a multi-MB phone photo never sits in memory or goes over the wire at full size.
+ */
+function PhotoPicker({
+  image,
+  onChange,
+}: {
+  image: string | null
+  onChange: (value: string | null) => void
+}) {
+  const [reading, setReading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const pick = async (file: File | undefined) => {
+    if (!file) return
+    setReading(true)
+    setError(null)
+    try {
+      onChange(await downscaleImage(file))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read the image.')
+    } finally {
+      setReading(false)
+    }
+  }
+
+  if (image !== null) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+        <img src={image} alt="Attached enquiry photo" className="h-16 w-16 rounded object-cover" />
+        <span className="flex-1 text-[12px] text-slate-600">Photo attached — the agent will read it.</span>
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="text-[11.5px] font-medium text-slate-600 hover:text-slate-900"
+        >
+          Remove
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex cursor-pointer items-center gap-2 self-start rounded-md border border-dashed border-slate-300 px-3 py-2 text-[12px] font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900">
+        {reading ? 'Reading photo…' : 'Attach a photo of the enquiry'}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          disabled={reading}
+          onChange={(e) => {
+            void pick(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+      </label>
+      {error && <p className="text-[12px] text-red-600">{error}</p>}
+    </div>
+  )
 }
 
 /**

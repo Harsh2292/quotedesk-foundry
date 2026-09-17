@@ -357,6 +357,133 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         JsonSerializer.Serialize(end.Result, JsonOptions).Should().Contain("\"known\":true").And.NotContain("sku", "Intake's tool never identifies a part");
     }
 
+    /// <summary>task foundry-04: a photographed enquiry reaches Intake's model call as image content,
+    /// and the image is gone from every checkpoint the run writes — it rides <c>EnquiryInput</c> into
+    /// Intake and is stripped there, so it is never re-serialised on each superstep.</summary>
+    [Fact]
+    public async Task StartAsync_ImageEnquiry_SendsTheImageToIntakeAndNeverCheckpointsIt()
+    {
+        // A distinctive base64 payload, so its absence from a checkpoint cannot be a coincidence.
+        var imageBase64 = Convert.ToBase64String(Enumerable.Range(0, 3000).Select(i => (byte)(i % 251)).ToArray());
+        var dataUrl = $"data:image/jpeg;base64,{imageBase64}";
+        var enquiryId = await fixture.Enquiries.CreateAsync(
+            new NewEnquiry("Paste", "kiran@shreejitextiles.com", string.Empty, Now, CustomerId: null, "pending", dataUrl),
+            CancellationToken.None);
+
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var stub = new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id));
+        var pipeline = BuildPipeline(stub);
+
+        var events = await CollectAsync(pipeline.StartAsync(enquiryId, CancellationToken.None));
+
+        events.Should().NotContain(e => e is ErrorEvent);
+        events.Should().ContainSingle(e => e is ApprovalRequiredEvent);
+
+        var intakeImage = stub.ReceivedMessages[0].SelectMany(m => m.Contents).OfType<DataContent>()
+            .Should().ContainSingle("Intake reads the photo").Subject;
+        intakeImage.MediaType.Should().Be("image/jpeg");
+        intakeImage.Uri.Should().Be(dataUrl);
+
+        stub.ReceivedMessages.Skip(1).SelectMany(r => r).SelectMany(m => m.Contents).OfType<DataContent>()
+            .Should().BeEmpty("only Intake sees the image; Resolve and Narrate work from Intake's structured output");
+
+        var run = await fixture.AgentRuns.GetLatestByEnquiryIdAsync(enquiryId, CancellationToken.None);
+        var checkpoints = await fixture.Checkpoints.GetIndexAsync(run!.SessionId, parentCheckpointId: null, CancellationToken.None);
+        checkpoints.Should().NotBeEmpty();
+        foreach (var checkpoint in checkpoints)
+        {
+            var payload = await fixture.Checkpoints.GetPayloadAsync(run.SessionId, checkpoint.CheckpointId, CancellationToken.None);
+            payload.Should().NotContain(imageBase64[..200], $"checkpoint {checkpoint.CheckpointId} must not carry the image");
+        }
+    }
+
+    /// <summary>task foundry-04: intake.md tells Intake to write quantity 0 when a handwritten quantity
+    /// cannot be read, rather than guess one. Such a line must reach the human as unresolved — never be
+    /// priced — whatever SKU Resolve claims for it. Code enforces that, not the prompt.</summary>
+    [Fact]
+    public async Task StartAsync_LineWithUnreadableQuantity_IsUnresolvedEvenWhenResolveClaimsASku()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var turns = WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id);
+        turns[4] = WorkedExampleScript.Text(turns[4].Text.Replace("\"quantity\":40", "\"quantity\":0", StringComparison.Ordinal));
+        var pipeline = BuildPipeline(new StubChatClient(turns));
+
+        var events = await CollectAsync(pipeline.StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        var request = events.OfType<ApprovalRequiredEvent>().Should().ContainSingle().Subject.Payload.Should().BeOfType<ApprovalRequest>().Subject;
+        request.PricedQuote.Lines.Should().NotContain(l => l.Sku == "BELT-PU-25MM");
+        request.Unresolved.Should().Contain(l => l.OriginalDescription.Contains("PU timing belt", StringComparison.Ordinal)
+            && l.Reason.Contains("quantity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A photo needs the capable vision model; typed text does not. Intake picks its model per
+    /// enquiry, and the trace names the one that actually read it.</summary>
+    [Fact]
+    public async Task StartAsync_ImageEnquiry_ReadsWithTheImageModelAndTextWithTheTextModel()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var imageEnquiryId = await fixture.Enquiries.CreateAsync(
+            new NewEnquiry("Paste", "kiran@shreejitextiles.com", string.Empty, Now, CustomerId: null, "pending", "data:image/png;base64,iVBORw0KGgo="),
+            CancellationToken.None);
+
+        var imageEvents = await CollectAsync(
+            BuildPipeline(new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id)), intakeModel: "text-model", intakeImageModel: "image-model")
+                .StartAsync(imageEnquiryId, CancellationToken.None));
+        var textEvents = await CollectAsync(
+            BuildPipeline(new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji.Id)), intakeModel: "text-model", intakeImageModel: "image-model")
+                .StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        imageEvents.OfType<StageEvent>().Single(e => e.Stage == "intake").Model.Should().Be("image-model");
+        textEvents.OfType<StageEvent>().Single(e => e.Stage == "intake").Model.Should().Be("text-model");
+    }
+
+    [Fact]
+    public async Task StartAsync_NoImageModelConfigured_ImageEnquiryFallsBackToTheIntakeModel()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var imageEnquiryId = await fixture.Enquiries.CreateAsync(
+            new NewEnquiry("Paste", "kiran@shreejitextiles.com", string.Empty, Now, CustomerId: null, "pending", "data:image/png;base64,iVBORw0KGgo="),
+            CancellationToken.None);
+
+        var events = await CollectAsync(
+            BuildPipeline(new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id)), intakeModel: "text-model")
+                .StartAsync(imageEnquiryId, CancellationToken.None));
+
+        events.OfType<StageEvent>().Single(e => e.Stage == "intake").Model.Should().Be("text-model");
+    }
+
+    /// <summary>Code review, foundry-04: the unreadable-quantity guard must look at what Intake read,
+    /// not at Resolve's own number. Here Intake could not read the belt's quantity (0) and Resolve
+    /// filled in 40 — a quantity the customer never wrote must not be priced.</summary>
+    [Fact]
+    public async Task StartAsync_ResolveFillsInAQuantityIntakeCouldNotRead_LineStaysUnresolved()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var turns = WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id);
+        turns[0] = WorkedExampleScript.Text(turns[0].Text.Replace(
+            "\"40 mtr of the 25mm PU timing belt\",\"quantity\":40", "\"40 mtr of the 25mm PU timing belt\",\"quantity\":0", StringComparison.Ordinal));
+        turns[0].Text.Should().Contain("\"quantity\":0", "the test must actually zero Intake's belt quantity");
+
+        var events = await CollectAsync(BuildPipeline(new StubChatClient(turns)).StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        var request = events.OfType<ApprovalRequiredEvent>().Should().ContainSingle().Subject.Payload.Should().BeOfType<ApprovalRequest>().Subject;
+        request.PricedQuote.Lines.Should().NotContain(l => l.Sku == "BELT-PU-25MM");
+        request.Unresolved.Should().Contain(l => l.OriginalDescription.Contains("PU timing belt", StringComparison.Ordinal)
+            && l.Reason.Contains("quantity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task StartAsync_TextEnquiry_SendsNoImageContent()
+    {
+        var shreeji = await fixture.Customers.FindByEmailDomainAsync("shreejitextiles.com", CancellationToken.None);
+        var stub = new StubChatClient(WorkedExampleScript.BuildWorkedExampleTurns(shreeji!.Id));
+        var pipeline = BuildPipeline(stub);
+
+        await CollectAsync(pipeline.StartAsync(ShreejiEnquiryId, CancellationToken.None));
+
+        stub.ReceivedMessages.SelectMany(r => r).SelectMany(m => m.Contents).OfType<DataContent>().Should().BeEmpty();
+    }
+
     /// <summary>task foundry-03: one ToolCallBudget per run, shared by both agents. With a limit of 2,
     /// Intake's term check and Resolve's resolve_customer spend it, so Resolve's next call is refused.
     /// If each agent had its own budget, that call would have succeeded — which is what this proves.</summary>
@@ -415,7 +542,9 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         events.Should().ContainSingle(e => e is ApprovalRequiredEvent);
     }
 
-    private EnquiryPipeline BuildPipeline(IChatClient chatClient, int tokenBudget = 20_000, int maxToolCalls = 8, int intakeMaxToolCalls = 2)
+    private EnquiryPipeline BuildPipeline(
+        IChatClient chatClient, int tokenBudget = 20_000, int maxToolCalls = 8, int intakeMaxToolCalls = 2,
+        string? intakeModel = null, string? intakeImageModel = null)
     {
         var timeProvider = new FixedTimeProvider(Now);
         var customerTools = new CustomerTools(fixture.Customers, fixture.OrderHistory);
@@ -424,7 +553,7 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
         var pricingTools = new PricingTools(fixture.Customers, fixture.Catalog, fixture.Stock, fixture.PriceRules, timeProvider);
         var readTools = new ReadToolRegistry(customerTools, catalogTools, stockTools, pricingTools);
         var writeTools = new QuoteWriteTools(fixture.Quotes, fixture.Enquiries, timeProvider);
-        var options = new LlmOptions { Endpoint = "https://example.test/", ApiKey = "unused", Model = "stub", MaxToolCalls = maxToolCalls, IntakeMaxToolCalls = intakeMaxToolCalls, TokenBudget = tokenBudget };
+        var options = new LlmOptions { Endpoint = "https://example.test/", ApiKey = "unused", Model = "stub", MaxToolCalls = maxToolCalls, IntakeMaxToolCalls = intakeMaxToolCalls, TokenBudget = tokenBudget, IntakeModel = intakeModel, IntakeImageModel = intakeImageModel };
         var checkpointStore = new SqlCheckpointStore(fixture.Checkpoints, timeProvider);
 
         // One shared stub instance for every stage — its ordered turns assume Intake, Resolve and

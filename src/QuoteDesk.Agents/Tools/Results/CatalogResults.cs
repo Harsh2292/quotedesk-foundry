@@ -49,8 +49,16 @@ public sealed record CatalogueTermCheck
     public required IReadOnlyList<string> Families { get; init; }
 
     /// <summary>At most three item names containing the term, so the model can see the word in
-    /// context — enough to confirm a reading, never enough to pick a part.</summary>
+    /// context — enough to confirm a reading, never enough to pick a part. When the term is not known
+    /// but has <see cref="Suggestions"/>, the families and names describe the suggestions instead.</summary>
     public required IReadOnlyList<string> ExampleNames { get; init; }
+
+    /// <summary>When the term is not known: up to three readings of it that <i>are</i> real catalogue
+    /// phrases, each a small spelling correction ("tming belt" → "timing belt", "PV belt" → "pu belt"),
+    /// closest first. Built only from words in item names, families and attributes — never a SKU
+    /// code — and a word containing a digit is never corrected, since a changed number is a different
+    /// part, not a typo. Empty when the term is known or nothing is close enough.</summary>
+    public IReadOnlyList<string> Suggestions { get; init; } = [];
 }
 
 /// <summary>

@@ -115,6 +115,23 @@ public sealed class ResolveExecutor(
                 continue;
             }
 
+            // A quantity Intake could not read is written as 0 (intake.md) — a line for a human to
+            // complete, never one to price, whatever SKU the model paired it with. Checked against
+            // Intake's own reading, not only Resolve's number: Resolve could otherwise fill in a
+            // quantity the customer never wrote, e.g. from order history (code review, foundry-04).
+            var intakeLine = extracted.Lines.FirstOrDefault(l =>
+                string.Equals(l.Description.Trim(), line.OriginalDescription.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (line.Quantity <= 0 || intakeLine is { Quantity: <= 0 })
+            {
+                unresolved.Add(new UnresolvedLine
+                {
+                    OriginalDescription = line.OriginalDescription,
+                    Quantity = Math.Min(line.Quantity, intakeLine?.Quantity ?? line.Quantity),
+                    Reason = "The quantity could not be read from the enquiry — a human needs to fill it in.",
+                });
+                continue;
+            }
+
             var item = await catalog.GetBySkuAsync(claimedSku, cancellationToken);
             if (item is null)
             {

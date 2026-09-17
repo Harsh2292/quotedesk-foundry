@@ -1,4 +1,4 @@
-import { apiJson } from './client'
+import { ApiError, apiFetch, apiJson } from './client'
 import type {
   EnquiryCreatedResponse,
   EnquiryDetailResponse,
@@ -28,3 +28,15 @@ export const listQuotes = (signal?: AbortSignal): Promise<QuoteSummaryResponse[]
 
 export const getQuote = (id: number, signal?: AbortSignal): Promise<QuoteDetailResponse> =>
   apiJson(`/api/quotes/${id}`, { signal })
+
+/** The enquiry's photo, or `null` when it has none (404). Kept separate from `getEnquiry` — the
+ * detail response is fetched on every Desk navigation and must stay light. */
+export async function getEnquiryImage(id: number, signal?: AbortSignal): Promise<Blob | null> {
+  try {
+    const response = await apiFetch(`/api/enquiries/${id}/image`, { signal })
+    return await response.blob()
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null
+    throw err
+  }
+}

@@ -14,6 +14,8 @@ public class EnquiryConfiguration : IEntityTypeConfiguration<Enquiry>
         // No max length: task 04 tests a 50KB pasted body, so this stays nvarchar(max).
         builder.Property(e => e.RawBody).IsRequired();
         builder.Property(e => e.Status).HasMaxLength(30).IsRequired();
+        // nvarchar(max), nullable: a base64 data URL, capped at ~2 MB decoded by QuoteDesk.Intake.
+        builder.Property(e => e.ImageDataUrl);
 
         builder.HasOne(e => e.Customer)
             .WithMany()

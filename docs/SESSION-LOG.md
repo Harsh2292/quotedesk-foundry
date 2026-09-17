@@ -1276,3 +1276,59 @@ Both builds clean; 153 unit + 61 integration tests green. Live Foundry eval pass
 
 **Addendum — reversed for time (supersedes the addendum above):** Harsh deferred multi-part and batch enquiries because of the deadline. **foundry-04 is back to its original one-photo plan**, plus a "Start here" section: the `verify_catalogue_term` carry-over fixes, and an early live check that `gpt-5-nano` reads a handwritten photo accurately. The multi-part and batch designs are kept as **extra-06** and **extra-07** (task files, README extras table, FOUNDRY-PLAN extras). There is no foundry-04b.
 Per Harsh, the deferred plan was **not removed**. It is kept in `docs/FOUNDRY-PLAN.md` §4c under an "⏸ IGNORE FOR NOW" heading, and as `on hold` rows in the `tasks/README.md` queue pointing at the extra-06/07 task files.
+
+## 2026-09-17 (cont. 3) — foundry-04: image intake (built; crafted-photo live check open)
+
+**Done:** A pasted enquiry can carry one photo, and the body may be blank. The photo is downscaled in the browser, validated server-side (JPEG/PNG/WebP, 2 MB max, else 400), stored on `Enquiries.ImageDataUrl` and sent to Intake as image content. `IntakeExecutor` strips it, so no checkpoint carries it (a test scans every payload). `verify_catalogue_term` now suggests close catalogue phrases for misspellings ("PV belt" → "pu belt") and knows family names. Both builds clean, 182 unit + 69 integration tests green, web build passes. The migration is applied to the local dev DB. Staged, not committed.
+
+**Files that matter:** `src/QuoteDesk.Agents/Pipeline/IntakeExecutor.cs` (`BuildPrompt`, the strip), `src/QuoteDesk.Intake/PastedImage.cs`, `tests/QuoteDesk.Evals/FoundryImageIntakeEval.cs` (live check with per-call model, latency and tokens).
+
+**Decisions made:**
+- Status rule: blank body and no **readable** image → `needs_manual_entry`. The old attachment-only test (metadata only) stays unchanged and correct, and voice notes still need a human.
+- An unreadable handwritten quantity is written as 0. Resolve's reconcile code makes any quantity ≤ 0 unresolved, so it is never priced.
+- Suggestions never use SKU codes and never change digits.
+- Intake stays at reasoning `None`. `Low` read the date correctly, but the run went from ~40 s to 66 s.
+
+**Known gaps:**
+- The live check used a synthetic handwriting-font image, not a photograph. nano read all quantities right 3/3 and the Intake call took 3.8–7.2 s, but it did **not** call `verify_catalogue_term` on a cleanly drawn "PV".
+- With `None`, the date "need by 5th" was missed once. A date line was added to `intake.md`; its effect is not yet measured.
+- Narrate (nano) once wrote "discount ₹20%" for an 8% line. The numbers are right; the sentence was wrong. This is for foundry-05/07.
+- No browser test of the photo picker (needs Google sign-in).
+
+**Blocked on Harsh:**
+- (1) Commit the staged change.
+- (2) Write and photograph the crafted demo list with a genuinely ambiguous letter, run it through the Desk, and check the trace for `verify_catalogue_term`.
+- (3) If it still doesn't fire, decide: accept it, or raise Intake's reasoning/model (measured cost: ~25 s per run).
+
+**Next:** close foundry-04's live check, then `foundry-05` (policy grounding), which also targets the Narrate misstatement.
+
+**Correction (same session):** the "~25 s per run" cost of `Low` reasoning above is overstated. Per-stage timestamps show `Low` added ~5–10 s (Intake + Narrate, the only stages it applies to); the remaining ~17 s was Resolve varying between runs, and Resolve's reasoning is unchanged by that setting. Production is and was `LightStageReasoningEffort: None`; `appsettings.json` was never modified.
+
+## 2026-09-17 (cont. 4) — foundry-04 closed: real-photo tests, model routing, reviews
+
+**Done:**
+- **Reviews and fixes:** three reviews (code review, security review, simplifier) on the first version, then one more code review and security review of everything after. All findings are fixed except the demo risks in SPEC §5.
+- **Model routing:** Intake reads photos on `gpt-5-mini` (`Llm:IntakeImageModel`) and text on `gpt-5-nano`.
+- **Approval card:** shows the customer's photo (`GET /api/enquiries/{id}/image`) with a "check against the photo" note.
+- **Quantity guard:** a quantity Intake couldn't read can't be priced, even if Resolve fills one in.
+- **Prompts:** no invented words; mixed Gujarati/Hindi rules; the prompt examples share no item with the demo.
+- **Verified:** both builds clean, 201 unit + 80 integration tests pass, the web build passes, and the live Foundry text and photo evals pass. Everything is staged, not committed.
+
+**Files that matter:** `docs/SPEC.md` §5 (the "Also resolved in foundry-04" list), `src/QuoteDesk.Agents/Pipeline/IntakeExecutor.cs` (`IntakeModels`), `src/QuoteDesk.Web/src/components/EnquiryPhoto.tsx`.
+
+**Decisions made:**
+- **Real photo, mini:** Harsh's messy handwritten photo showed mini misreading "20mm" as "25mm" (a real SKU, so it was priced green) and "2₹" (2RS) as "2F". Opus made the same "2Z" mistake.
+- **No re-read loop:** we don't build a "re-read the photo" agent loop. The misreads are systematic, it adds cost, and it can't catch a confident misread. The human checks the photo instead.
+- **Demo photo:** use clear handwriting. Keep the feature for messy photos.
+- **What wins the hackathon:** a clear 3-minute video beats hidden complexity.
+- **Extras:** WhatsApp only if 06–08 are done with a day left; multi-photo and batch are skipped for the hackathon.
+
+**Known gaps:**
+- `verify_catalogue_term` has never fired on a photo in a live run; check it with the demo photo while recording.
+- Accepted demo risks (SPEC §5): any signed-in user can fetch any photo by id, there's no per-user upload cap, and `GetByIdAsync` loads the image column.
+- Narrate (nano) still misstates discounts sometimes (foundry-05).
+- The old leftovers `.claude/worktrees/agent-a55cab43871bcb1b0` and branches `worktree-agent-a55cab…`, `-aa3278…`, `-ae2e40…` are kept on Harsh's instruction.
+
+**Blocked on Harsh:** Commit. CLAUDE.md forbids Claude running `git commit`.
+
+**Next:** `/task foundry-05` (policy grounding). It also fixes Narrate's misstated discounts before anything is recorded.

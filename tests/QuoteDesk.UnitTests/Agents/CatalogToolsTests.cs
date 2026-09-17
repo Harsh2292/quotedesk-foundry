@@ -234,6 +234,166 @@ public class CatalogToolsTests
         check.ExampleNames.Should().HaveCount(3);
     }
 
+    [Theory]
+    [InlineData("tming belt", "timing belt", "Belts")]
+    [InlineData("spindel tap", "spindle tape", "SpindleTapes")]
+    [InlineData("bearng", "bearing", "Bearings")]
+    public async Task VerifyCatalogueTermAsync_Misspelling_IsNotKnownButSuggestsTheClosestCatalogueWords(
+        string misspelt, string expectedSuggestion, string expectedFamily)
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync(misspelt, CancellationToken.None);
+
+        check.Known.Should().BeFalse("the term as written is not in the catalogue");
+        check.Suggestions.Should().Contain(expectedSuggestion);
+        check.Families.Should().Contain(expectedFamily);
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_IllegiblePvBelt_SuggestsPuBeltAmongTheReadings()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        // The crafted demo photo: "PU" handwritten so it could pass for "PV".
+        var check = await tools.VerifyCatalogueTermAsync("PV belt", CancellationToken.None);
+
+        check.Known.Should().BeFalse();
+        check.Suggestions.Should().Contain("pu belt");
+        check.Suggestions.Should().HaveCountLessThanOrEqualTo(3);
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_KnownTerm_HasNoSuggestions()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync("timing belt", CancellationToken.None);
+
+        check.Known.Should().BeTrue();
+        check.Suggestions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_WrongPartNumber_IsNeverCorrectedToANeighbouringNumber()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        // "6211" is one edit from "6201"/"6210", but a number is a spec: suggesting a neighbour would
+        // nudge the model towards a different part. Numbers are never corrected.
+        var check = await tools.VerifyCatalogueTermAsync("6211 bearing", CancellationToken.None);
+
+        check.Known.Should().BeFalse();
+        check.Suggestions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_UnrelatedWord_HasNoSuggestions()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        var check = await tools.VerifyCatalogueTermAsync("hydraulic seal", CancellationToken.None);
+
+        check.Suggestions.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("SpindleTapes", "SpindleTapes")]
+    [InlineData("Gears", "Gears")]
+    public async Task VerifyCatalogueTermAsync_FamilyName_IsKnown(string term, string family)
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        // Recall used to search only SKU and name, so a family name that appears in neither was
+        // reported unknown (foundry-03 code review).
+        var check = await tools.VerifyCatalogueTermAsync(term, CancellationToken.None);
+
+        check.Known.Should().BeTrue();
+        check.Families.Should().Equal(family);
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_Suggestions_NeverContainASkuOnlyCode()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        // "VBLX" is one edit from the SKU code "VBLT", which appears in no item name — a suggestion
+        // built from SKU fragments would leak part numbers to Intake.
+        var check = await tools.VerifyCatalogueTermAsync("vblx", CancellationToken.None);
+
+        check.Suggestions.Should().NotContain(s => s.Contains("vblt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_LongNearMissTerm_ReturnsPromptlyWithNoSuggestions()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        // Twenty distinct words, each within the edit budget of three catalogue words ("RING",
+        // "TIMING", "ROVING"...). Building every combination is 3^20 readings — the tool must refuse
+        // to try rather than spin, since the term comes from a model reading customer text.
+        const string term =
+            "sering raring rering reaing taring tering eiring eoring biring boring " +
+            "riming rtming raming reming toring troing trving riding rising riving";
+
+        // Task.Run so a runaway synchronous loop still lets the timeout fire instead of hanging the run.
+        var check = await Task.Run(() => tools.VerifyCatalogueTermAsync(term, CancellationToken.None))
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        check.Known.Should().BeFalse();
+        check.Suggestions.Should().BeEmpty();
+        check.Families.Should().BeEmpty();
+        check.ExampleNames.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_TermLongerThanSixtyFourCharacters_HasNoSuggestions()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+
+        // Only two meaningful words ("tming belt"), which on its own suggests "timing belt" — but a
+        // term this long is not "one unclear word", so no spelling search is attempted.
+        const string term = "please send the quote for the tming belt, urgent, as usual, asap, please send";
+        term.Length.Should().BeGreaterThan(64);
+
+        var check = await tools.VerifyCatalogueTermAsync(term, CancellationToken.None);
+
+        check.Known.Should().BeFalse();
+        check.Suggestions.Should().BeEmpty();
+        check.Families.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_CancelledToken_Throws()
+    {
+        var tools = new CatalogTools(SeededCatalog());
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = async () => await tools.VerifyCatalogueTermAsync("tming belt", cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task VerifyCatalogueTermAsync_ManyCloserSpellingsThatDoNotFit_StillSuggestsTheOneThatDoes()
+    {
+        // "PV" is one edit from PA–PG (alphabetically first; "PC" is skipped, it is a stop word) and from PU. Only "PU" appears with "belt"
+        // in any item, so a per-word cut to the first five spellings must not drop it (code review).
+        var catalog = new FakeCatalogRepository();
+        var id = 0;
+        foreach (var code in new[] { "PA", "PB", "PD", "PE", "PF", "PG" })
+        {
+            catalog.Items.Add(new CatalogItemRecord(++id, $"BRG-{code}", $"{code} Bearing", "Bearings", "Nos", 100m, 70m, null));
+        }
+
+        catalog.Items.Add(new CatalogItemRecord(++id, "BELT-PU-25MM", "25mm PU Timing Belt", "Belts", "Mtr", 30m, 21m, null));
+
+        var check = await new CatalogTools(catalog).VerifyCatalogueTermAsync("PV belt", CancellationToken.None);
+
+        check.Suggestions.Should().Contain("pu belt");
+    }
+
     [Fact]
     public async Task VerifyCatalogueTermAsync_NullTerm_Throws()
     {

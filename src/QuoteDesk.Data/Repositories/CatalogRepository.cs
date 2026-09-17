@@ -47,6 +47,15 @@ public sealed class CatalogRepository(QuoteDeskDbContext db) : ICatalogRepositor
         return [.. items.Select(ToRecord)];
     }
 
+    public async Task<IReadOnlyList<CatalogItemRecord>> GetAllAsync(CancellationToken cancellationToken)
+    {
+        var items = await db.CatalogItems.AsNoTracking()
+            .OrderBy(c => c.Sku)
+            .ToListAsync(cancellationToken);
+
+        return [.. items.Select(ToRecord)];
+    }
+
     private static CatalogItemRecord ToRecord(Entities.CatalogItem c) =>
         new(c.Id, c.Sku, c.Name, c.Category, c.Uom, c.ListPrice, c.CostPrice, c.Attributes);
 }

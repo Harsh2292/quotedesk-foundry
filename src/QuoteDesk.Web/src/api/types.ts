@@ -18,6 +18,8 @@ export type { AgentEvent }
 export interface PasteEnquiryRequest {
   body: string
   senderId?: string
+  /** A photo of the enquiry as a `data:image/jpeg;base64,...` URL; the body may be blank with one. */
+  imageDataUrl?: string
 }
 
 export interface EnquiryCreatedResponse {
