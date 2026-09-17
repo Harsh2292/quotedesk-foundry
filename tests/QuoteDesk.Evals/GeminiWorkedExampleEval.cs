@@ -19,7 +19,8 @@ namespace QuoteDesk.Evals;
 /// tool-call argument shapes <c>AIFunctionFactory</c> produces, end to end against docs/DOMAIN.md's
 /// worked example? Runs against the real local dev database (already seeded — see
 /// docs/SESSION-LOG.md), never a test database, and never resumes to approval, so it only reads.
-/// Reads <c>Llm:ApiKey</c> from the same local <c>dotnet user-secrets</c> store
+/// Reads <c>Llm:GeminiApiKey</c> — not <c>Llm:ApiKey</c>, which holds the Foundry key since task
+/// foundry-02 and must never be sent to Google — from the same local <c>dotnet user-secrets</c> store
 /// <c>QuoteDesk.Api</c> uses (see the shared <c>UserSecretsId</c> in this project's own .csproj) —
 /// never a command-line environment variable, so the key is never typed anywhere a shell history or
 /// an approval prompt could echo it. Skips itself — passing trivially rather than failing — when no
@@ -36,7 +37,7 @@ public class GeminiWorkedExampleEval
         var configuration = new ConfigurationBuilder()
             .AddUserSecrets<GeminiWorkedExampleEval>()
             .Build();
-        var apiKey = configuration["Llm:ApiKey"];
+        var apiKey = configuration["Llm:GeminiApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             return; // No key supplied — this eval is a deliberate no-op outside a manual run.
@@ -90,7 +91,7 @@ public class GeminiWorkedExampleEval
             MaxToolCalls = 8,
             TokenBudget = 20_000,
         };
-        // No ExtractModel/ResolveModel/NarrateModel set above, so every stage falls back to Model —
+        // No IntakeModel/ResolveModel/NarrateModel set above, so every stage falls back to Model —
         // this eval deliberately puts gemini-3.6-flash on all three, unlike production's per-stage
         // routing, since the point of this eval is the capable model end to end.
         var chatClients = new ChatClientRegistry(llmOptions, model => ChatClientFactory.Create(llmOptions, model), loggerFactory: null);

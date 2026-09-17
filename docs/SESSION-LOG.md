@@ -1106,3 +1106,112 @@ which means it's still reading the *old* `CLAUDE.md` as its always-loaded instru
 fork's corrected one — a fresh session opened here will load the right rules and index the right
 codebase automatically. Once the two deployments exist and their exact names are confirmed, start
 `foundry-01` (repo/push, if not already done) then `foundry-02` (the real provider switch).
+
+---
+
+## 2026-09-14 — foundry-01 done; local run proven; a real Foundry finding
+
+**Done:** The app runs locally end-to-end (SQL container, API, Vite) and the full worked example
+(Shreeji Textiles) completed through approval to a sent quote, verified in the database, on the
+Gemini provider — proving the pipeline itself is healthy before touching Foundry. `foundry-01`
+finished: public repo `Harsh2292/quotedesk-foundry` exists, `development` is the default branch, both
+branches' first CI run is green, repo indexed in codebase-memory. **Live-verified finding that unblocks
+foundry-02:** Foundry's "instant access" preview serves `gpt-5-mini`/`gpt-5-nano` by name with **zero
+deployment**, in `westus3` (matches the resource's region) — a real `chat/completions` call to each
+returned `HTTP 200` with no deployment ever created. Step 0's "create two deployments" task is moot.
+
+**Files that matter:** `docs/FOUNDRY-PLAN.md` Step 0 (the instant-access finding, in full) and
+`tasks/task-foundry-02-provider.md` (updated to use model names directly, no deployment dependency).
+
+**Decisions made:** `docker-compose.yml`'s container names changed to `quotedesk-foundry-sql`/`-api`
+(collided with a leftover container from the original project). `.github/workflows/cd.yml` deleted —
+it hardcoded the *original* deployed project's exact Azure resource names and GHCR path, which this
+fork's cut app-deployment scope doesn't need and which risked touching that live deployment if ever
+wired to real secrets. `HEAD` was repointed from an unborn `development` to `main` before the first
+commit, so the import lands on `main` first, matching the intended workflow.
+
+**Known gaps:** `Llm:Provider` is still `"gemini"` in `appsettings.json` (local user-secrets currently
+hold a real Gemini key, not the Foundry key, purely to prove the pipeline live tonight) —
+`foundry-02` replaces this properly. `src/QuoteDesk.Web/.env.development.local` (gitignored, holds
+the real `VITE_GOOGLE_CLIENT_ID`) exists only on this machine.
+
+**Blocked on Harsh:** Nothing — the deployment blocker is resolved. Local commit is still pending:
+`docs/FOUNDRY-PLAN.md`, `tasks/README.md`, and the two task files above are staged but uncommitted.
+
+**Next:** `foundry-02` — swap `ChatClientFactory`/`LlmOptions`/`appsettings.json` to the `"foundry"`
+provider, `gpt-5-nano`/`gpt-5-mini` by name, and run `FoundryWorkedExampleEval` live.
+
+---
+
+## 2026-09-15 — foundry-02 done: Foundry is the live provider
+
+**Done:** The pipeline now runs on Microsoft Foundry by default. `ChatClientFactory` gained a
+`"foundry"` branch (reuses the existing OpenAI-compatible path `"github"` already used — no new code,
+confirming the endpoint really does speak the same wire protocol). `appsettings.json` points at the
+resource's `/openai/v1/` URL with `IntakeModel`/`NarrateModel: gpt-5-nano`, `ResolveModel: gpt-5-mini`,
+`TokenBudget` 60000, `MaxToolCalls` 10. `LlmOptions.ExtractModel` → `IntakeModel` (property rename
+only — `ExtractExecutor`/`"Extract"` stage name are untouched, that's foundry-03).
+`FoundryWorkedExampleEval` passed live: 42s, real multi-turn tool calls via
+`FunctionInvokingChatClient` against `gpt-5-mini`, `resolve_customer` fired, reached one
+`ApprovalRequiredEvent`, no `ErrorEvent`. No schema-rejection warning, so `UseStructuredOutput` stays
+`true`. Both build configs clean, 129 unit + 52 integration tests green.
+
+**Files that matter:** `src/QuoteDesk.Agents/Llm/ChatClientFactory.cs`,
+`src/QuoteDesk.Api/appsettings.json`, `tests/QuoteDesk.Evals/FoundryWorkedExampleEval.cs`, and
+`tasks/task-foundry-02-provider.md`'s Notes on completion (the full write-up).
+
+**Decisions made:** `LlmOptions.Provider`'s C# class **default** stays `"gemini"`, not `"foundry"` —
+the three Gemini eval files build `LlmOptions` without setting `Provider`, relying on that default to
+route through `Google.GenAI`'s native SDK; changing it would silently reintroduce the
+`thought_signature` bug there. `"foundry"` is the real default only via `appsettings.json`.
+
+**Known gaps:** foundry-03 (Intake Agent rename + `verify_catalogue_term` tool) not started.
+
+**Blocked on Harsh:** Nothing to answer before the next session. One thing worth doing when
+convenient: the local `Llm:ApiKey` in user-secrets was found stale (53-char `AQ.`-prefixed value,
+didn't match the resource's actual 84-char live key — HTTP 401 on a raw `curl` proved it, unrelated to
+any code). Fixed by re-pulling the current key via `az cognitiveservices account keys list` and
+updating user-secrets directly (not a portal action, so didn't need to wait for Harsh). Worth tracking
+down *why* the stored value went stale, and this is also a good moment for the routine key-regenerate
+hygiene `docs/FOUNDRY-PLAN.md` Step 0 already flagged.
+
+**Next:** `foundry-03` — rename `ExtractExecutor` → `IntakeExecutor`, add the `verify_catalogue_term`
+tool, update the stage union and prompts.
+
+---
+
+## 2026-09-15 — Latency investigated and root-caused; Extract/Narrate sped up, Resolve deliberately untouched
+
+**Done:** Measured real per-stage/tool timing (a throwaway instrumented run, not committed) and found
+the ~48s pipeline is 99.98% model latency — the three Resolve tool calls together cost 109ms; DB reads
+were never the bottleneck. Root-caused *why* with hard evidence (a raw request against the real Extract
+prompt): 320 of 473 completion tokens were invisible reasoning tokens, not the visible answer. Verified
+`ReasoningEffort.None` (a real `Microsoft.Extensions.AI.ChatOptions.Reasoning` property, not
+experimental) drops reasoning tokens to 0 with the output byte-for-byte unchanged. Wired it into Extract
+and Narrate only (27%/64% faster respectively); confirmed live afterward that both judgement calls still
+land correctly (bearing resolves via history at 8%, spindle tape stays unresolved with its reason).
+Both builds clean, 181 tests green. Change is staged, not committed.
+
+**Files that matter:** `EnquiryPipeline.cs`'s `BuildNodes` (Extract/Narrate now built via
+`ChatClientAgentOptions { ChatOptions.Reasoning = ReasoningEffort.None }` instead of the plain
+`AsAIAgent(instructions:, ...)` overload — Resolve is untouched).
+
+**Decisions made:** Resolve deliberately kept on default reasoning — it is the one stage with a genuine
+judgment call, and Harsh's explicit standing rule (saved to memory, `quality-over-speed.md`) is that
+precision always outranks latency, never the reverse. Multi-tenant/concurrent-client handling was
+explicitly declined as out of scope (`docs/SPEC.md` §9's Multi-tenancy non-goal). Found a real,
+still-open design gap for `foundry-04`: `docs/SPEC.md`'s `IncomingEnquiry.Attachments[]` is plural, but
+`FOUNDRY-PLAN.md`'s actual plan (`Enquiries.ImageDataUrl`, one nullable column) only supports one image
+— fix to a real array/child table when `foundry-04` is built, not a queue.
+
+**Known gaps:** Resolve's reasoning effort is unverified — it needs testing across **multiple** runs
+(its own tool-calling behavior is non-deterministic: one run called `check_stock` three times, another
+zero times) before deciding whether `None`/`Low` is safe there too. `ChatOptions.AllowMultipleToolCalls`
+(letting `resolve_customer`+`search_catalog` fire in one turn, since neither depends on the other) is
+identified as a lever but not yet tried.
+
+**Blocked on Harsh:** Nothing.
+
+**Next:** `foundry-03` (Intake Agent rename + `verify_catalogue_term` tool). While touching Resolve's
+prompt/tools there, also test `ReasoningEffort.None`/`Low` against Resolve specifically, across several
+runs, before applying it — same bar as above.

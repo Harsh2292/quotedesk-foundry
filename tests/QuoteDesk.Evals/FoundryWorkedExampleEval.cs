@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using QuoteDesk.Agents.Checkpointing;
@@ -13,33 +14,30 @@ using QuoteDesk.Data.Repositories;
 namespace QuoteDesk.Evals;
 
 /// <summary>
-/// Second round of the quota-vs-quality investigation (docs/SESSION-LOG.md): `gemini-3.1-flash-lite`
-/// passed on quota (its own separate bucket, no daily-limit error) but failed on quality — it searched
-/// too broadly (112 weak candidates for one bearing lookup) and then brute-forced disambiguation one
-/// SKU at a time, burning 153,724 tokens against a 20,000 budget before the safety cap stopped it.
-/// Google AI Studio's own rate-limit dashboard (checked directly by Harsh, not a blog) shows
-/// `gemini-3.5-flash-lite` at 500 requests/day — 25x `gemini-3.6-flash`'s real 20/day — so it's worth
-/// the same rigorous check: a different, newer "Lite" model isn't guaranteed to repeat the same
-/// failure.
-///
-/// Deliberately not just a ping: the actual risk of a smaller model isn't "does it answer" but "does
-/// it still get the genuinely ambiguous judgement calls right" — the spindle tape correctly staying
-/// unresolved rather than guessed, the bearing correctly resolving via order history rather than
-/// picked arbitrarily. Holds this model to the exact same bar <see cref="GeminiWorkedExampleEval"/>
-/// already holds `gemini-3.6-flash` to, so the comparison is fair. Same no-op-without-a-key contract.
+/// The gate for task foundry-02 (see tasks/task-foundry-02-provider.md's acceptance criteria): does
+/// the real Foundry resource endpoint — <c>https://pharshin29-2918-resource.services.ai.azure.com/openai/v1/</c>,
+/// confirmed live in docs/FOUNDRY-PLAN.md Step 0 — accept the tool-call argument shapes
+/// <c>AIFunctionFactory</c> produces, end to end against docs/DOMAIN.md's worked example, through real
+/// multi-turn <c>FunctionInvokingChatClient</c> calls, not a hello-world completion? Copied from
+/// <see cref="GeminiWorkedExampleEval"/>'s structure — same worked example, same repository wiring,
+/// same no-op-without-a-key contract. Reads <c>Llm:ApiKey</c> from the same local
+/// <c>dotnet user-secrets</c> store <c>QuoteDesk.Api</c> uses, never a command-line environment
+/// variable, so the key is never typed anywhere a shell history or an approval prompt could echo it.
+/// Runs against the real local dev database (already seeded), never a test database, and never
+/// resumes to approval, so it only reads.
 /// </summary>
-public class Gemini35FlashLiteWorkedExampleEval
+public class FoundryWorkedExampleEval
 {
     private const string DevConnectionString =
         "Server=localhost,1433;Database=QuoteDesk;User Id=sa;Password=QuoteDesk!Local1;TrustServerCertificate=True";
 
     [Fact]
-    public async Task StartAsync_WorkedExampleAgainst35FlashLite_ResolvesBearingCorrectlyAndLeavesSpindleTapeUnresolved()
+    public async Task StartAsync_WorkedExampleAgainstRealFoundry_ResolvesBearingsAndBeltAndSuspendsAtApproval()
     {
         var configuration = new ConfigurationBuilder()
-            .AddUserSecrets<Gemini35FlashLiteWorkedExampleEval>()
+            .AddUserSecrets<FoundryWorkedExampleEval>()
             .Build();
-        var apiKey = configuration["Llm:GeminiApiKey"];
+        var apiKey = configuration["Llm:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             return; // No key supplied — this eval is a deliberate no-op outside a manual run.
@@ -87,17 +85,26 @@ public class Gemini35FlashLiteWorkedExampleEval
 
         var llmOptions = new LlmOptions
         {
-            Provider = "gemini",
-            Endpoint = "https://generativelanguage.googleapis.com/v1beta/openai/",
+            Provider = "foundry",
+            Endpoint = "https://pharshin29-2918-resource.services.ai.azure.com/openai/v1/",
             ApiKey = apiKey,
-            Model = "gemini-3.5-flash-lite",
-            MaxToolCalls = 8,
-            TokenBudget = 20_000,
+            Model = "gpt-5-mini",
+            IntakeModel = "gpt-5-nano",
+            ResolveModel = "gpt-5-mini",
+            NarrateModel = "gpt-5-nano",
+            LightStageReasoningEffort = ReasoningEffort.None,
+            MaxToolCalls = 10,
+            TokenBudget = 60_000,
         };
-        // No IntakeModel/ResolveModel/NarrateModel set above, so every stage falls back to Model —
-        // this eval is a single-model comparison (this Lite model, end to end), not production's
-        // per-stage routing.
+        // Mirrors appsettings.json's "foundry" profile exactly — per-stage models and the light-stage
+        // reasoning effort. An earlier version ran gpt-5-mini on every stage, which meant the reasoning
+        // setting production sends to gpt-5-nano was never exercised by any live run (found in code
+        // review, 2026-09-17). This eval is only worth anything if it runs what production runs.
         var chatClients = new ChatClientRegistry(llmOptions, model => ChatClientFactory.Create(llmOptions, model), loggerFactory: null);
+        // A dedicated factory, not the scoped `db` above: the workflow engine writes checkpoints from
+        // its own background execution task, concurrently with this method's own use of `db` — the
+        // same reason WorkflowCheckpointRepository uses IDbContextFactory in production (docs/SPEC.md
+        // §6). Sharing one instance throws EF Core's "a second operation was started on this context".
         var checkpointStore = new SqlCheckpointStore(new WorkflowCheckpointRepository(new DevDbContextFactory()), timeProvider);
 
         var pipeline = new EnquiryPipeline(
@@ -111,20 +118,17 @@ public class Gemini35FlashLiteWorkedExampleEval
             events.Add(evt);
         }
 
-        events.Should().NotContain(e => e is ErrorEvent, "gemini-3.5-flash-lite should complete cleanly the same way gemini-3.6-flash does");
+        events.Should().NotContain(e => e is ErrorEvent, "a real Foundry call should complete cleanly against the worked example");
+        events.OfType<ToolStartEvent>().Select(e => e.Name).Should().Contain("resolve_customer");
+        var approval = events.OfType<ApprovalRequiredEvent>().Should().ContainSingle().Subject;
 
-        var approval = events.Should().ContainSingle(e => e is ApprovalRequiredEvent)
-            .Which.Should().BeOfType<ApprovalRequiredEvent>().Subject;
+        // The worked example's two judgement calls (docs/DOMAIN.md) — the quality bar a cheaper model
+        // or a lower reasoning effort has to clear, not just "it answered".
         var request = approval.Payload.Should().BeOfType<ApprovalRequest>().Subject;
-
-        // The two judgement calls that actually matter — a weaker model's real failure mode is
-        // guessing here instead of routing to a human, which these two assertions catch directly.
-        request.Unresolved.Should().ContainSingle(
-            l => l.OriginalDescription.Contains("spindle tape", StringComparison.OrdinalIgnoreCase),
-            "the two spindle tape thickness variants are genuinely ambiguous and must not be guessed, regardless of model");
-        request.PricedQuote.Lines.Should().ContainSingle(
-            l => l.Sku == "BRG-6203-2RS",
-            "the bearing should resolve via the customer's order history, not be picked arbitrarily or left unresolved");
+        request.PricedQuote.Lines.Select(l => l.Sku).Should().Contain("BRG-6203-2RS", "order history resolves 'same as last time' to the 2RS");
+        request.Unresolved.Should().Contain(
+            u => u.OriginalDescription.Contains("spindle tape", StringComparison.OrdinalIgnoreCase),
+            "'the thicker one' has no purchase history and must stay unresolved, never guessed");
     }
 
     private sealed class DevDbContextFactory : IDbContextFactory<QuoteDeskDbContext>

@@ -150,8 +150,22 @@ running `az` mutations against Foundry resources on his behalf.
 - ⏳ Budget alert at ₹200 not yet set (a smoke detector, not a brake — see `docs/AGENT-A-THON.md` §4a
   for why an Azure Budget alone doesn't cap spend, and what actually does).
 
-**Once the two deployments exist, tell the new session their exact names (they should already match
-`gpt-5-nano`/`gpt-5-mini` above) and `foundry-02` can start for real.**
+**Resolved 2026-09-14 — no deployments needed at all.** Verified live: Microsoft Foundry's "instant
+access" (preview) feature lets a supported model be called by name with zero deployment step, through
+the exact same resource endpoint and OpenAI-compatible wire protocol `foundry-02` already plans to
+use. It's region-locked to **West US 3** during preview — `pharshin29-2918-resource` already lives
+there — and `az rest` against the model catalog confirms `gpt-5-mini` and `gpt-5-nano` both show
+`instant: true` for this subscription in that region. Live proof: a real `chat/completions` POST to
+`https://pharshin29-2918-resource.services.ai.azure.com/openai/v1/chat/completions` with
+`"model": "gpt-5-mini"` (and again with `"gpt-5-nano"`) returned `HTTP 200` with a real completion —
+no deployment existed at the time of either call. The two planned "Standard, lowest TPM" deployments
+in the table above are **not needed**; `foundry-02` can point `IntakeModel`/`ResolveModel` straight at
+`gpt-5-nano`/`gpt-5-mini` today. Caveats worth carrying into the submission document: instant access
+is a preview feature, draws from a separate shared *global* quota pool rather than a deployment's own
+regional quota, and doesn't support custom guardrails/content-filter policies or reserved throughput
+— all fine for a demo, not a substitute for a deployment in a real production setup.
+
+**`foundry-02` can start now — nothing further is blocked on Harsh's Azure portal work.**
 
 ---
 

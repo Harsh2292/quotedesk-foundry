@@ -5,7 +5,7 @@ namespace QuoteDesk.Agents.Llm;
 
 /// <summary>
 /// Builds and caches one logging-wrapped <see cref="IChatClient"/> per distinct model name across
-/// the pipeline's three stages (<see cref="LlmOptions.ExtractModel"/>, <see cref="LlmOptions.ResolveModel"/>,
+/// the pipeline's three stages (<see cref="LlmOptions.IntakeModel"/>, <see cref="LlmOptions.ResolveModel"/>,
 /// <see cref="LlmOptions.NarrateModel"/> — each falling back to <see cref="LlmOptions.Model"/>).
 ///
 /// This is the fix for what killed the first live run of the reworked pipeline
@@ -41,7 +41,7 @@ public sealed class ChatClientRegistry
         _loggerFactory = loggerFactory;
     }
 
-    public IChatClient Extract => GetOrCreate(_options.ExtractModel ?? _options.Model);
+    public IChatClient Intake => GetOrCreate(_options.IntakeModel ?? _options.Model);
 
     public IChatClient Resolve => GetOrCreate(_options.ResolveModel ?? _options.Model);
 

@@ -28,12 +28,12 @@ task after this one has somewhere to land.
 
 ## Acceptance criteria
 
-- [ ] `gh auth login` completed
-- [ ] Public repo `quotedesk-foundry` exists, `development` is the default working branch
-- [ ] First commit is exactly the import message above, run by Harsh
-- [ ] `VITE_GOOGLE_CLIENT_ID` repo Variable set
-- [ ] All three CI jobs green on the pushed commit
-- [ ] `codebase-memory-mcp cli index_repository --repo-path .` run against the new repo
+- [x] `gh auth login` completed
+- [x] Public repo `quotedesk-foundry` exists, `development` is the default working branch
+- [x] First commit is exactly the import message above, run by Harsh
+- [x] `VITE_GOOGLE_CLIENT_ID` repo Variable set
+- [x] All three CI jobs green on the pushed commit
+- [x] `codebase-memory-mcp cli index_repository --repo-path .` run against the new repo
 
 ## Out of scope
 
@@ -42,4 +42,22 @@ CI mechanics.
 
 ## Notes on completion
 
-*(fill in once run)*
+Done 2026-09-14. `gh auth login` via the web device-code flow (account `Harsh2292`). First commit
+`659eca9` landed on `main` with `cd.yml` already removed from the tree (see below) and
+`docker-compose.yml`'s container names already fixed — both changes were made before the commit so
+they're part of the baseline import rather than a follow-up. `gh repo create quotedesk-foundry
+--public --source=. --remote=origin`, then `git push -u origin main`, `git switch -c development`,
+`git push -u origin development` — all run by Harsh per the standing "never git commit/push" rule.
+Both branches' first CI run went green (`build-test`, `web`, `image`) in ~2 minutes each. Claude then
+set `development` as the default branch (`gh repo edit --default-branch development`) and set the
+`VITE_GOOGLE_CLIENT_ID` repo Variable — neither is a commit/push, so within Claude's own remit — and
+ran `codebase-memory` `index_repository` (2,756 nodes, 8,666 edges, 0 skipped/parse-partial).
+
+**One deviation from the plan, decided this session:** `.github/workflows/cd.yml` was deleted rather
+than carried over. It hardcoded the *original* deployed Quote-Desk project's exact Azure resource
+names (`az containerapp update --name quotedesk-api --resource-group quotedesk-rg`) and GHCR path
+(`ghcr.io/harsh2292/quotedesk-api`) — and `quotedesk-rg` is also where this fork's own Foundry
+resource lives (Step 0). Keeping a workflow with those exact identifiers around, wired to Azure OIDC
+secrets at some future point, risked deploying this fork's code over the original's live demo. This
+fork's app deployment is cut per `docs/FOUNDRY-PLAN.md`'s cut list anyway, so the file simply isn't
+needed. `ci.yml` was untouched.

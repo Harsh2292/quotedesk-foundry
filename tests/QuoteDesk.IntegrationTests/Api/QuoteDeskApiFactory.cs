@@ -48,6 +48,10 @@ public sealed class QuoteDeskApiFactory : WebApplicationFactory<Program>, IAsync
         // Program.cs now fails fast on an empty Llm:ApiKey (task 07) — a placeholder is enough since
         // IChatClient itself is swapped for ScriptableChatClient below and never reaches a real provider.
         Environment.SetEnvironmentVariable("Llm__ApiKey", "test-key");
+        // Set explicitly (task foundry-02) rather than falling through to appsettings.json's default —
+        // that default is what actually changed in this task, and a test relying on it implicitly
+        // would silently start needing a real Foundry endpoint the next time it changes again.
+        Environment.SetEnvironmentVariable("Llm__Provider", "foundry");
 
         // Every test in this collection shares one host, and therefore one process-lifetime rate
         // limiter (task 09) — a real production limit (10 sign-ins/minute, for instance) is far

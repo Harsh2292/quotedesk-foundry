@@ -15,8 +15,8 @@ fork's equivalent of that project's `docs/SPEC.md` — the plan each task file i
 | # | Task | Status |
 |---|---|---|
 | foundry-00 | [Fork mechanics](task-foundry-00-fork-and-repo.md) | done |
-| foundry-01 | [New GitHub repo, first push, CI](task-foundry-01-new-repo.md) | todo |
-| foundry-02 | [Foundry inference provider](task-foundry-02-provider.md) | todo |
+| foundry-01 | [New GitHub repo, first push, CI](task-foundry-01-new-repo.md) | done |
+| foundry-02 | [Foundry inference provider](task-foundry-02-provider.md) | done |
 | foundry-03 | [Intake Agent](task-foundry-03-intake-agent.md) | todo |
 | foundry-04 | [Image intake](task-foundry-04-image-intake.md) | todo |
 | foundry-05 | [Quotation Policy grounding](task-foundry-05-policy-grounding.md) | todo |

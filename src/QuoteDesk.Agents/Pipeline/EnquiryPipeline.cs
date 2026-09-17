@@ -262,16 +262,39 @@ public sealed partial class EnquiryPipeline(
         // (ChatClientRegistry: Extract/Narrate on the cheap high-quota model, Resolve on the capable
         // one — docs/SPEC.md §4), all three sharing this run's one TokenUsageTracker so the budget is
         // still enforced per round-trip across every model in play, not per model.
-        var extractModel = options.ExtractModel ?? options.Model;
+        var extractModel = options.IntakeModel ?? options.Model;
         var resolveModel = options.ResolveModel ?? options.Model;
         var narrateModel = options.NarrateModel ?? options.Model;
 
-        var extractClient = new BudgetedChatClient(chatClients.Extract, tokens);
+        var extractClient = new BudgetedChatClient(chatClients.Intake, tokens);
         var resolveClient = new BudgetedChatClient(chatClients.Resolve, tokens);
         var narrateClient = new BudgetedChatClient(chatClients.Narrate, tokens);
 
-        var extractAgent = extractClient.AsAIAgent(instructions: prompts.Extract, name: "Extract", description: null, tools: null);
-        var narrateAgent = narrateClient.AsAIAgent(instructions: prompts.Narrate, name: "Narrate", description: null, tools: null);
+        // A reduced reasoning effort on Extract and Narrate only, and only when configured
+        // (LlmOptions.LightStageReasoningEffort — null sends nothing, so an unverified provider is
+        // never handed it). "None" was measured live on 2026-09-15 against gpt-5-mini — wall time
+        // ~38% lower (6.0s -> 3.76s) on the exact Extract request, reasoning_tokens 320 -> 0, JSON
+        // output byte-for-byte unchanged — and confirmed accepted by gpt-5-nano, the model these two
+        // stages actually route to, on 2026-09-17. Deliberately NOT applied to Resolve — that stage makes the one
+        // genuine judgment call this architecture exists to protect (is a match confident enough to
+        // resolve, or must it stay unresolved), and CLAUDE.md/Harsh's own standing rule for this
+        // project is that precision always outranks latency, never the reverse. Apply this same
+        // change to Resolve only after it is verified, separately, against the worked example's two
+        // judgement calls (the 6203 bearing resolving via order history, the spindle tape staying
+        // unresolved) still coming out right.
+        var lightReasoning = options.LightStageReasoningEffort is { } effort
+            ? new ReasoningOptions { Effort = effort }
+            : null;
+        var extractAgent = extractClient.AsAIAgent(new ChatClientAgentOptions
+        {
+            Name = "Extract",
+            ChatOptions = new ChatOptions { Instructions = prompts.Extract, Reasoning = lightReasoning },
+        });
+        var narrateAgent = narrateClient.AsAIAgent(new ChatClientAgentOptions
+        {
+            Name = "Narrate",
+            ChatOptions = new ChatOptions { Instructions = prompts.Narrate, Reasoning = lightReasoning },
+        });
 
         // price_quote is deliberately excluded: Resolve gets only the four lookup tools, so pricing
         // is never something the model can call — it is the Price node's job, in plain code.

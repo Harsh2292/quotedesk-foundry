@@ -15,6 +15,12 @@ namespace QuoteDesk.Agents.Llm;
 /// <c>tests/QuoteDesk.Evals/GeminiWorkedExampleEval.cs</c> for the full-pipeline proof).
 /// "github" is unaffected — a real
 /// OpenAI endpoint, no `thought_signature` involved — and keeps the original OpenAI-compatible path.
+/// "foundry" (this fork's default, task foundry-02) is unaffected too: Microsoft Foundry's resource
+/// endpoint speaks the same OpenAI-compatible wire protocol, confirmed with a live
+/// <c>chat/completions</c> call against <c>gpt-5-mini</c>/<c>gpt-5-nano</c> via "instant access" — no
+/// model deployment needed (docs/FOUNDRY-PLAN.md Step 0) — so it reuses the identical
+/// <see cref="CreateOpenAiCompatible"/> path "github" already exercises. "gemini"/"github" stay in
+/// the code as a fallback for recording night.
 /// </summary>
 public static class ChatClientFactory
 {
@@ -37,10 +43,11 @@ public static class ChatClientFactory
 
         return options.Provider switch
         {
+            "foundry" => CreateOpenAiCompatible(options, model),
             "github" => CreateOpenAiCompatible(options, model),
             "gemini" => new Google.GenAI.Client(apiKey: options.ApiKey).AsIChatClient(model),
             _ => throw new InvalidOperationException(
-                $"Unknown Llm:Provider '{options.Provider}'. Expected 'gemini' or 'github'."),
+                $"Unknown Llm:Provider '{options.Provider}'. Expected 'foundry', 'gemini' or 'github'."),
         };
     }
 

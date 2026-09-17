@@ -36,7 +36,7 @@ public class GeminiFlashLiteWorkedExampleEval
         var configuration = new ConfigurationBuilder()
             .AddUserSecrets<GeminiFlashLiteWorkedExampleEval>()
             .Build();
-        var apiKey = configuration["Llm:ApiKey"];
+        var apiKey = configuration["Llm:GeminiApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             return; // No key supplied — this eval is a deliberate no-op outside a manual run.
@@ -91,7 +91,7 @@ public class GeminiFlashLiteWorkedExampleEval
             MaxToolCalls = 8,
             TokenBudget = 20_000,
         };
-        // No ExtractModel/ResolveModel/NarrateModel set above, so every stage falls back to Model —
+        // No IntakeModel/ResolveModel/NarrateModel set above, so every stage falls back to Model —
         // this eval is a single-model comparison (this Lite model, end to end), not production's
         // per-stage routing.
         var chatClients = new ChatClientRegistry(llmOptions, model => ChatClientFactory.Create(llmOptions, model), loggerFactory: null);
