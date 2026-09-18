@@ -131,6 +131,45 @@ public class FoundryWorkedExampleEval
         request.Unresolved.Should().Contain(
             u => u.OriginalDescription.Contains("spindle tape", StringComparison.OrdinalIgnoreCase),
             "'the thicker one' has no purchase history and must stay unresolved, never guessed");
+
+        AssertNarrationCitesPolicy(request);
+    }
+
+    /// <summary>
+    /// Task foundry-05's live acceptance criterion: the narration visibly cites the quotation policy
+    /// for a discount that is within it. Written deliberately tolerantly — the wording is a model's,
+    /// and pinning an exact sentence would fail on a rephrasing that is just as good. What is
+    /// asserted is that a policy concept is named at all (the alternative being "an 8% discount
+    /// applies", which is the ungrounded assertion this task exists to remove), and that the
+    /// currency-on-a-percentage bug seen live on 2026-09-17 ("discount ₹20%" for an 8% line) has not
+    /// come back. The text is written to test output either way, because reading the actual sentence
+    /// is the real check and a live run costs real money to repeat.
+    /// </summary>
+    private static void AssertNarrationCitesPolicy(ApprovalRequest request)
+    {
+        var narration = request.Narration;
+        Console.WriteLine($"[foundry-05] Narration: {narration}");
+
+        var bearingLine = request.PricedQuote.Lines.SingleOrDefault(l => l.Sku == "BRG-6203-2RS");
+        if (bearingLine is not null)
+        {
+            Console.WriteLine(
+                $"[foundry-05] Bearing line: discount {bearingLine.DiscountPct:P0} " +
+                $"= slab {bearingLine.SlabDiscountPct:P0} + tier {bearingLine.TierDiscountPct:P0}, capped: {bearingLine.DiscountCapped}");
+            bearingLine.SlabDiscountPct.Should().Be(0.06m, "250 units clears the 200+ slab");
+            bearingLine.TierDiscountPct.Should().Be(0.02m, "Shreeji Textiles is tier B");
+        }
+
+        narration.Should().NotBeNullOrWhiteSpace();
+        narration.Should().NotMatchRegex(@"₹\s*\d+(\.\d+)?\s*%", "a percentage is never written with a currency symbol");
+
+        // Asserted on the narration, not on the word list — FluentAssertions' collection overload
+        // would read as "the fixed word list should contain a match", which is backwards from what is
+        // under test. `ContainAny` would read correctly but has no case-insensitive overload in
+        // 7.2.0, and swapping to it would quietly change the matching.
+        string[] policyWords = ["slab", "tier", "policy"];
+        policyWords.Any(w => narration.Contains(w, StringComparison.OrdinalIgnoreCase))
+            .Should().BeTrue("the narration must name the rule behind the discount, not merely assert the number");
     }
 
     private sealed class DevDbContextFactory : IDbContextFactory<QuoteDeskDbContext>

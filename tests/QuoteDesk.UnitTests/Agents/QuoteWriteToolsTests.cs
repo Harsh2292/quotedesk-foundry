@@ -19,6 +19,7 @@ public class QuoteWriteToolsTests
             new PricedQuoteLine
             {
                 Sku = "BRG-6203-2RS", Quantity = 250, ListPrice = 250.00m, DiscountPct = 0.08m,
+                SlabDiscountPct = 0.06m, TierDiscountPct = 0.02m, DiscountCapped = false,
                 NetUnitPrice = 230.00m, LineTotal = 57_500.00m, RequiresOverride = false,
             },
         ],

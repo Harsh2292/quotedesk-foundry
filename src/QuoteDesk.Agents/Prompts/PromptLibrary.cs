@@ -14,11 +14,38 @@ public sealed class PromptLibrary
     public string Resolve { get; }
     public string Narrate { get; }
 
+    /// <summary>
+    /// The company's quotation policy — the one knowledge source in this system, as opposed to a
+    /// tool (task foundry-05). It grounds the narration's <i>explanation</i> of a discount, a freight
+    /// waiver or a validity date in a named, versioned rule. It is never a second source of the
+    /// arithmetic: every number still comes from <see cref="QuoteDesk.Domain"/>, and the document
+    /// says so in its own text so the instruction survives into the model's context.
+    /// </summary>
+    public string QuotationPolicy { get; }
+
+    /// <summary>
+    /// What the Narrate agent is actually instructed with: <see cref="Narrate"/> followed by
+    /// <see cref="QuotationPolicy"/>. Composed once here rather than in the pipeline, so there is one
+    /// answer to "what does Narrate know" and a test can assert on it directly.
+    /// </summary>
+    public string NarrateWithPolicy { get; }
+
     public PromptLibrary()
     {
         Intake = Load("intake.md");
         Resolve = Load("resolve.md");
         Narrate = Load("narrate.md");
+        QuotationPolicy = Load("quotation-policy.md");
+
+        NarrateWithPolicy = $"""
+            {Narrate}
+
+            ---
+
+            The company's quotation policy follows. Cite it as described above; never compute from it.
+
+            {QuotationPolicy}
+            """;
     }
 
     private static string Load(string fileName)

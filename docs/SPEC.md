@@ -532,6 +532,103 @@ tool loop until the provider refused. What it does now:
 returned all ~48 of a customer's orders, re-sent every turn — the second-worst driver of runaway
 token cost. Twenty most-recent still answers "same as last time".
 
+**Resolved in task foundry-05 — the Quotation Policy, this system's one knowledge source.**
+`src/QuoteDesk.Agents/Prompts/quotation-policy.md` (versioned, `v1 — 2026-09-18`) states the
+company's own quotation rules — the slab ladder, tier discounts, the 15% combined cap, the 10%
+margin floor, freight zones and the waiver threshold, GST, delivery dates, quote validity and the
+unknown-sender rule. `PromptLibrary` loads it alongside the three agent prompts and exposes
+`NarrateWithPolicy` (narrate.md followed by the policy); that composed text, not `Narrate`, is what
+the Narrate agent is built with. Module 8's brief asks how each agent is grounded by tools **and
+knowledge sources** — the tools were already there, this is the knowledge source, and it is a plain
+embedded document rather than Foundry-hosted file search because that feature belongs to the Foundry
+Agent Service runtime, which this app does not run (docs/FOUNDRY-PLAN.md §4d).
+
+- **It grounds the explanation, never the arithmetic.** So that this is structural rather than a
+  promise in a prompt, `QuoteDesk.Domain.PricedLine` now reports `SlabDiscountPct`, `TierDiscountPct`
+  and `DiscountCapped` alongside the combined `DiscountPct` it already returned — `PricingEngine`
+  computed all three internally and discarded two of them. They flow through `PricedQuoteLine` to
+  the narration, and `ResolutionResult.CustomerTier` carries the tier read from the customer record
+  in code. The model is therefore handed every component it needs to say *"250 units clears the
+  200-or-more slab at 6%, and tier B adds 2%"* without adding anything up, working out which slab a
+  quantity falls into, or inferring a tier from a percentage — all three of which `narrate.md` now
+  explicitly forbids. Neither component is a cost or a margin figure (both are ordinary commercial
+  terms a customer is told), so `ToolResultBoundaryTests` is unaffected and still passes.
+- **Drift is what would make a knowledge source worse than none** — a slab rate changed in
+  `SlabDiscountPolicy` but not in the document would have the narration confidently cite a rule the
+  pricing no longer follows. `QuotationPolicyGroundingTests` therefore reads every number back out
+  of the shipped Markdown and asserts it against `QuoteDesk.Domain`'s actual constants
+  (`SlabDiscountPolicy.DefaultLadder`, `TierDiscountPolicy`, `PricingEngine.MaxCombinedDiscountPct`,
+  `MarginFloorPolicy.FloorPct`, `QuoteTotalsCalculator.GstRatePct`, `FreightPolicy`), including that
+  the document has no slab rung the code does not. The acceptance criterion "matches docs/DOMAIN.md's
+  numbers exactly" is machine-checked, not eyeballed.
+- **It also fixes a real misstatement.** `gpt-5-nano` had written "discount ₹20%" for an 8% line
+  (docs/SESSION-LOG.md, 2026-09-17) — numbers right, sentence wrong. `narrate.md` now states that a
+  percentage is written with `%` and never a currency symbol, that a margin figure is never stated,
+  and that a figure appearing to disagree with policy is reported exactly as given and flagged, never
+  corrected. A model must never "fix" a number toward what the document suggests.
+
+**Resolved in task foundry-06 — agent identity and tracing.** Each of the three agents is built with
+an explicit, stable `ChatClientAgentOptions.Id` (`quotedesk-intake:1`, `quotedesk-resolve:1`,
+`quotedesk-narrate:1`, Foundry's `name:version` convention) and wrapped once with
+`.AsBuilder().UseOpenTelemetry("QuoteDesk.Agents", …)`. Both live in
+`QuoteDesk.Agents.Pipeline.AgentInstrumentation`/`AgentIdentity`.
+
+The default this overrides is worth stating, because it fails silently: MAF fills `gen_ai.agent.id`
+from `AIAgent.Id`, and generates a fresh random one per instance when unset. QuoteDesk builds its
+agents per run (`TracedAIFunction` needs the live `IWorkflowContext`), so every run would have
+appeared in Foundry as a new agent that ran once — nothing throwing, the traces simply never grouping,
+and a registered agent matching none of them. `AgentTelemetryTests` attaches an `ActivityListener`,
+runs the pipeline twice, and asserts the emitted ids are identical and are the registered values.
+
+Only the agents are instrumented: `OpenTelemetryAgent` auto-wires the inner chat client's telemetry
+itself (its installed XML docs' `autoWireChatClient` parameter), so adding `UseOpenTelemetry` to
+`ChatClientRegistry` as well would double every span. `WorkflowBuilder.WithOpenTelemetry` was
+deliberately **not** added — it is the one change that might wrap executors and so alter the
+checkpointed workflow shape, which would strand every pending approval; agent spans already carry
+what registration and trace evaluation read. `Microsoft.Agents.AI.Workflows.Checkpointing.TypeId
+.IsMatch` compares only assembly simple name and type full name, so nothing else in this task changes
+the shape either.
+
+`Llm:TraceSensitiveData` (default `false`) controls whether spans carry `gen_ai.input.messages`/
+`output.messages`. Foundry's quality evaluators read exactly those and score `None` without them, so
+trace-based evaluation requires it on — at the cost of enquiry text landing in Application Insights.
+Real trade-off, stated in the submission document, config rather than a constant so a production
+deployment can decide differently. `Program.cs` registers the OpenTelemetry pipeline **only** when
+`AzureMonitor:ConnectionString` is set, so CI and every test stay fully offline.
+
+**One thing that setting never covers: a photograph.** `Microsoft.Extensions.AI`'s message serializer
+writes a `DataContent` part into `gen_ai.input.messages` as its **complete base64 payload**, and
+`OpenTelemetryAgent` propagates the flag to the chat client it auto-wires — so switching sensitive
+data on for evaluation would have shipped a customer's photo, in full, into Application Insights.
+Every other protection around the image guards a different path (stripped from checkpoints, absent
+from `EnquiryDetailResponse`, served only by a dedicated endpoint) and none of them apply to a span.
+`IntakeExecutor` therefore forces capture off for the one call that carries an image, and
+`AgentTelemetryTests` asserts on the emitted spans — with a control test proving a text enquiry under
+the same setting *does* capture its content, so the guarantee cannot pass vacuously. Little is lost:
+a base64 blob tells a text judge nothing, the image never reaches Resolve or Price, and foundry-07's
+dataset run grades the photo case from captured responses rather than traces. Found in the foundry-06
+security review, confirmed by decompiling the installed assemblies rather than inferred.
+
+Package: `Azure.Monitor.OpenTelemetry.AspNetCore` **1.6.0** (`QuoteDesk.Api` only). The project
+endpoint the evaluation SDK will need in foundry-07 is recorded in `docs/FOUNDRY-PLAN.md`'s endpoint
+table rather than in `appsettings.json`, since nothing binds it yet — it is distinct from
+`Llm:Endpoint`'s resource endpoint, which is the only one that serves chat completions.
+
+**Not provided by the platform here, and checked rather than assumed.** Foundry guardrails and
+content-filter policies do not apply to these calls, because the models are reached through instant
+access (preview), which `docs/FOUNDRY-PLAN.md` Step 0 records as not supporting custom guardrails or
+content-filter policies. Verified live on 2026-09-18 against `gpt-5-nano` on the resource endpoint:
+the response carries the `prompt_filter_results` and `content_filter_results` keys, but both come back
+as **empty objects** — no category severities, which is what a deployment with a filter policy
+attached does return. The fields are present; no policy is behind them.
+
+QuoteDesk's guardrails are therefore entirely its own, in code: the human approval gate before any
+write, write tools unreachable from the Resolve agent, untrusted-content wrapping on every prompt that
+carries customer text, deterministic pricing, and the reflection tests that keep cost and margin away
+from the model. They are visible in the in-app trace panel, not in the Foundry portal. The submission
+document should say this plainly rather than implying the platform supplies them — and it is a
+stronger answer, because these guardrails are the architecture, not a checkbox.
+
 ## 8. API
 
 ```

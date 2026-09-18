@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Threading.RateLimiting;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using QuoteDesk.Agents;
 using QuoteDesk.Agents.Llm;
+using QuoteDesk.Agents.Pipeline;
 using QuoteDesk.Api;
 using QuoteDesk.Api.Approvals;
 using QuoteDesk.Api.Auth;
@@ -47,6 +49,22 @@ if (string.IsNullOrWhiteSpace(llmOptions.ApiKey))
 }
 
 builder.Services.AddQuoteDeskAgentPipeline(llmOptions);
+
+// Agent spans go to the Application Insights resource connected to the Foundry project, which is
+// what makes a registered external agent's Traces tab — and task foundry-07's trace-based
+// evaluation — show anything at all.
+//
+// Skipped entirely when no connection string is configured, which is deliberate and load-bearing:
+// CI, every integration test and any local run without Azure settings must stay fully offline, so
+// this must never become a thing the test suite needs a real Azure resource for. Registering nothing
+// is a stronger guarantee than registering an exporter that happens to have nowhere to send.
+var azureMonitorConnectionString = builder.Configuration["AzureMonitor:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(azureMonitorConnectionString))
+{
+    builder.Services.AddOpenTelemetry()
+        .UseAzureMonitor(o => o.ConnectionString = azureMonitorConnectionString)
+        .WithTracing(t => t.AddSource(AgentInstrumentation.ActivitySourceName));
+}
 
 // Together, these turn every unhandled exception into a generic RFC 9457 ProblemDetails 500 — no
 // stack trace, no exception message, no connection string, per CLAUDE.md's Security rules. This

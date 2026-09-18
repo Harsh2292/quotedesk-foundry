@@ -301,11 +301,16 @@ public sealed partial class EnquiryPipeline(
         var lightReasoning = options.LightStageReasoningEffort is { } effort
             ? new ReasoningOptions { Effort = effort }
             : null;
-        var narrateAgent = narrateClient.AsAIAgent(new ChatClientAgentOptions
-        {
-            Name = "Narrate",
-            ChatOptions = new ChatOptions { Instructions = prompts.Narrate, Reasoning = lightReasoning },
-        });
+        var narrateAgent = AgentInstrumentation.Instrument(
+            narrateClient.AsAIAgent(new ChatClientAgentOptions
+            {
+                Id = AgentIdentity.Narrate.Id,
+                Name = AgentIdentity.Narrate.Name,
+                // NarrateWithPolicy, not Narrate: the quotation policy is Narrate's knowledge source,
+                // so it must be in the instructions the agent is actually built with (task foundry-05).
+                ChatOptions = new ChatOptions { Instructions = prompts.NarrateWithPolicy, Reasoning = lightReasoning },
+            }),
+            options.TraceSensitiveData);
 
         // Each agent's tools are named explicitly rather than filtered from ReadToolRegistry, so a
         // tool added to the registry reaches no agent until someone decides which one should have it.
@@ -315,8 +320,8 @@ public sealed partial class EnquiryPipeline(
         var resolveTools = ToolsNamed("resolve_customer", "get_customer_history", "search_catalog", "check_stock");
 
         return new WorkflowNodes(
-            new IntakeExecutor("Intake", new IntakeModels(intakeClient, intakeModel, intakeImageClient, intakeImageModel), intakeTools, prompts.Intake, lightReasoning, intakeIterations, intakeBudget, logger),
-            new ResolveExecutor("Resolve", resolveClient, resolveModel, resolveTools, prompts.Resolve, resolveIterations, toolBudget, catalog, customers, logger),
+            new IntakeExecutor("Intake", new IntakeModels(intakeClient, intakeModel, intakeImageClient, intakeImageModel), intakeTools, prompts.Intake, lightReasoning, intakeIterations, intakeBudget, options.TraceSensitiveData, logger),
+            new ResolveExecutor("Resolve", resolveClient, resolveModel, resolveTools, prompts.Resolve, resolveIterations, toolBudget, catalog, customers, options.TraceSensitiveData, logger),
             new PriceExecutor("Price", pricingTools, narrateAgent, narrateModel),
             new ApproveExecutor("Approve", writeTools, quotes, timeProvider));
     }

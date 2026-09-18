@@ -75,6 +75,13 @@ public sealed record ResolutionResult
     public required ExtractedEnquiry Extracted { get; init; }
     public int? CustomerId { get; init; }
     public string? CustomerName { get; init; }
+
+    /// <summary>"A" / "B" / "C", read from the matched customer record in code — null when the sender
+    /// matched nothing. Carried so the narration can name the tier behind a discount against
+    /// Prompts/quotation-policy.md rather than inferring it from a percentage (task foundry-05).
+    /// Not <c>required</c>: a checkpoint written before this field existed still deserializes.</summary>
+    public string? CustomerTier { get; init; }
+
     public required IReadOnlyList<ResolvedLine> Resolved { get; init; }
     public required IReadOnlyList<UnresolvedLine> Unresolved { get; init; }
 }

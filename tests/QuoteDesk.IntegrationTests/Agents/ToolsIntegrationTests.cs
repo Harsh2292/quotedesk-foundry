@@ -103,7 +103,7 @@ public class ToolsIntegrationTests(RepositoryFixture fixture)
         var pricedQuote = new PricedQuote
         {
             CustomerId = 1,
-            Lines = [new PricedQuoteLine { Sku = "BRG-6203-2RS", Quantity = 250, ListPrice = 250.00m, DiscountPct = 0.08m, NetUnitPrice = 230.00m, LineTotal = 57_500.00m, RequiresOverride = false }],
+            Lines = [new PricedQuoteLine { Sku = "BRG-6203-2RS", Quantity = 250, ListPrice = 250.00m, DiscountPct = 0.08m, SlabDiscountPct = 0.06m, TierDiscountPct = 0.02m, DiscountCapped = false, NetUnitPrice = 230.00m, LineTotal = 57_500.00m, RequiresOverride = false }],
             Subtotal = 57_500.00m,
             Freight = 0m,
             Tax = 10_350.00m,

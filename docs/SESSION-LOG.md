@@ -1332,3 +1332,90 @@ Per Harsh, the deferred plan was **not removed**. It is kept in `docs/FOUNDRY-PL
 **Blocked on Harsh:** Commit. CLAUDE.md forbids Claude running `git commit`.
 
 **Next:** `/task foundry-05` (policy grounding). It also fixes Narrate's misstated discounts before anything is recorded.
+
+## 2026-09-18 — foundry-05 done; foundry-06 code done, portal half open
+
+**Done:** The narration now cites the company's quotation policy instead of asserting a discount. A
+versioned `quotation-policy.md` (v1) ships embedded and is part of Narrate's instructions; the slab
+and tier components of every discount, and the customer's tier, are handed to the model by code so it
+cites rather than adds. Verified live on Foundry: *"…the 200-or-more slab plus tier B…"*. Separately,
+all three agents now carry stable ids (`quotedesk-intake:1`, `-resolve:1`, `-narrate:1`) and emit
+OpenTelemetry spans, inert unless `AzureMonitor:ConnectionString` is set. 224 unit + 85 integration
+tests, both build configs, web build and lint all green. Staged, not committed.
+
+**Files that matter:** `src/QuoteDesk.Agents/Prompts/quotation-policy.md` and `narrate.md`;
+`src/QuoteDesk.Agents/Pipeline/AgentInstrumentation.cs`;
+`tests/QuoteDesk.IntegrationTests/Agents/AgentTelemetryTests.cs`.
+
+**Decisions made:**
+- Domain reports `SlabDiscountPct`/`TierDiscountPct`/`DiscountCapped` (it computed and discarded them).
+  Letting the model work out "250 units → 200+ slab, 6%+2%" is arithmetic on money — rule 1 in all but
+  name. Citing given components is not.
+- `QuotationPolicyGroundingTests` asserts every number in the document against the domain constants. A
+  knowledge source that drifts is worse than none: it gets cited with full confidence.
+- **Grounding made the narration worse before better.** First live run: nine sentences, read the line
+  table back, cited the 15% cap on an uncapped line. `narrate.md` was restructured to lead with shape.
+  This is a real "lessons learned" item for the document.
+- `WorkflowBuilder.WithOpenTelemetry` deliberately skipped — the one change that might alter the
+  checkpointed shape. `TypeId.IsMatch` compares only assembly + type name, so nothing else does either;
+  version-stamping stays in extras-05.
+- Narrate's prompt is now wrapped in `UntrustedContent` (it repeats customer text via unresolved lines).
+
+**Known gaps:** Narration says "yields the applied discount" rather than naming 6% and 2% — wording,
+not a rule-1 risk; foundry-07 owns it. The 15 `pending_approval` runs predate today's change and are
+argued (not observed) to still resume. No trace has reached Foundry yet — nothing is connected.
+Guardrails are not available at all on instant-access models; QuoteDesk's are in code.
+
+**Blocked on Harsh:** (1) Commit — CLAUDE.md forbids Claude running `git commit`. (2) Regenerate the
+API key pasted in chat today. (3) All of foundry-06's portal half: connect App Insights, grant Log
+Analytics Reader to the project's managed identity, set `AzureMonitor:ConnectionString` and
+`Llm:TraceSensitiveData=true` in user-secrets, run one enquiry, register both agents as external
+agents, screenshot both Traces tabs. Steps are in the task file.
+
+**Next:** finish foundry-06's portal half, then `/task foundry-07` (evaluation), which cannot start
+until traces exist and both agents are registered.
+
+### 2026-09-18 (cont.) — three reviews on the staged foundry-05/06 diff
+
+**Reviews run:** code review, security review and a simplification pass, as parallel subagents over
+`git diff --cached`. The pricing and policy work came back clean (correct cap boundary, policy
+document matching the domain constants, no cost or margin reaching the model, no rule-1 violation).
+
+**The one real finding, fixed rather than documented.** Turning on `Llm:TraceSensitiveData` — which
+foundry-07 requires, and which the earlier entry told Harsh to set tonight — would have shipped a
+photographed enquiry's **complete base64 image** into Application Insights. Confirmed by decompiling
+the installed assemblies, not inferred: `Microsoft.Extensions.AI`'s message serializer writes a
+`DataContent` part into `gen_ai.input.messages` as its full base64 payload, `OpenTelemetryAgent`
+propagates the flag to the chat client it auto-wires under the same source name, and `Program.cs`
+subscribes that source. None of the existing image safeguards apply — they guard checkpoints and API
+responses, an entirely different path. `IntakeExecutor` now forces capture off for the one call that
+carries an image; `AgentTelemetryTests` asserts it on the emitted spans, **with a control test**
+proving a text enquiry under the same setting does capture its content, so the guarantee cannot pass
+vacuously. Little is lost: a base64 blob tells a text judge nothing, and foundry-07's dataset run
+grades the photo case from captured responses rather than traces.
+
+**Also applied:** removed `Foundry:ProjectEndpoint` from `appsettings.json` — nothing binds it yet, and
+`docs/FOUNDRY-PLAN.md`'s endpoint table already records the resource-vs-project distinction that
+actually matters; foundry-07 adds it back when something reads it. Fixed a backwards FluentAssertions
+call in the live eval. **Declined** one suggestion to merge two agent-id tests: the `[Theory]` is the
+only thing pinning `quotedesk-narrate:1`, which the other test does not cover.
+
+**Also verified live (one minimal call, ~29 tokens):** the current API key works against `gpt-5-nano`
+on the resource endpoint, HTTP 200. The response carries `prompt_filter_results`/
+`content_filter_results` keys but both are **empty objects** — evidence, not inference, that no
+content-filter policy is attached on the instant-access path. Foundry guardrails therefore do not
+apply here; QuoteDesk's guardrails are its own, in code. Say that plainly in the submission document.
+
+**Green after all fixes:** 224 unit + 87 integration tests, both build configs, web build and lint.
+
+**Code review's finding, also fixed:** `AgentTelemetryTests`' `ActivityListener` is process-global and
+filtered only by source name, while xUnit runs separate collections in parallel — `AgentStreamEndpointTests`
+(collection `QuoteDeskApi`) drives the identically-instrumented pipeline concurrently with this test
+(collection `Repository`). Comparing two positional slices of the captured list would therefore
+misattribute a foreign span and fail intermittently, breaking CLAUDE.md's "no ordering dependence".
+Now compared as **distinct sets**, which is immune for a neat reason: a foreign span carries one of the
+same three ids precisely *because* the ids are stable, and an unstable id would still introduce a new
+distinct entry and fail. Also de-duplicated the `Now` constant, which the extraction had left defined
+in two places. The review separately confirmed by decompiling 1.19.0 that `ResolveExecutor`'s move to
+the `ChatClientAgentOptions` overload loses nothing — the old constructor built the same options
+object internally — and that nothing is double-instrumented.

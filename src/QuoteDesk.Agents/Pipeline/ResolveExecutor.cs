@@ -26,6 +26,7 @@ public sealed class ResolveExecutor(
     ToolCallBudget budget,
     ICatalogRepository catalog,
     ICustomerRepository customers,
+    bool traceSensitiveData,
     ILogger logger)
     : Executor<ExtractionResult, ResolutionResult>(id, options: null, declareCrossRunShareable: false)
 {
@@ -44,7 +45,16 @@ public sealed class ResolveExecutor(
             .UseFunctionInvocation(configure: c => c.MaximumIterationsPerRequest = maxToolCalls)
             .Build();
 
-        var agent = chatClient.AsAIAgent(instructions: instructions, name: "Resolve", description: null, tools: tracedTools);
+        // The options overload, not the instructions/name one: only this one can set a stable Id, and
+        // without it every run reports a fresh random gen_ai.agent.id (task foundry-06).
+        var agent = AgentInstrumentation.Instrument(
+            chatClient.AsAIAgent(new ChatClientAgentOptions
+            {
+                Id = AgentIdentity.Resolve.Id,
+                Name = AgentIdentity.Resolve.Name,
+                ChatOptions = new ChatOptions { Instructions = instructions, Tools = tracedTools },
+            }),
+            traceSensitiveData);
 
         // Schema-enforced output is deliberately off for this stage (and for Intake, for the same reason).
         // It calls tools, and a strict response format applies to every turn of the tool loop — including the
@@ -94,6 +104,7 @@ public sealed class ResolveExecutor(
     {
         int? customerId = null;
         string? customerName = null;
+        string? customerTier = null;
         if (modelOutput.CustomerId is int claimedCustomerId)
         {
             var customer = await customers.GetByIdAsync(claimedCustomerId, cancellationToken);
@@ -101,6 +112,7 @@ public sealed class ResolveExecutor(
             {
                 customerId = customer.Id;
                 customerName = customer.Name;
+                customerTier = customer.Tier.ToString();
             }
         }
 
@@ -159,6 +171,7 @@ public sealed class ResolveExecutor(
             Extracted = extracted,
             CustomerId = customerId,
             CustomerName = customerName,
+            CustomerTier = customerTier,
             Resolved = resolved,
             Unresolved = unresolved,
         };

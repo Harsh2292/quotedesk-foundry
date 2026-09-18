@@ -17,7 +17,8 @@ public static class PricingEngine
         var slabs = request.Slabs ?? SlabDiscountPolicy.DefaultLadder;
         var slabPct = SlabDiscountPolicy.ResolveDiscountPct(request.Quantity, slabs);
         var tierPct = TierDiscountPolicy.ResolveDiscountPct(tier);
-        var combinedPct = Math.Min(slabPct + tierPct, MaxCombinedDiscountPct);
+        var uncappedPct = slabPct + tierPct;
+        var combinedPct = Math.Min(uncappedPct, MaxCombinedDiscountPct);
 
         var netUnitPrice = Money.Round(request.ListPrice * (1 - combinedPct));
         var lineTotal = Money.Round(netUnitPrice * request.Quantity);
@@ -34,6 +35,9 @@ public static class PricingEngine
             Quantity = request.Quantity,
             ListPrice = request.ListPrice,
             DiscountPct = combinedPct,
+            SlabDiscountPct = slabPct,
+            TierDiscountPct = tierPct,
+            DiscountCapped = uncappedPct > MaxCombinedDiscountPct,
             NetUnitPrice = netUnitPrice,
             LineTotal = lineTotal,
             MarginPct = marginPct,

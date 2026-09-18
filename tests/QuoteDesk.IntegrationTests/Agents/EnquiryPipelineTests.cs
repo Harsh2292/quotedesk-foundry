@@ -23,7 +23,9 @@ namespace QuoteDesk.IntegrationTests.Agents;
 [Collection("Repository")]
 public class EnquiryPipelineTests(RepositoryFixture fixture)
 {
-    private static readonly DateTimeOffset Now = new(2026, 3, 26, 8, 41, 0, TimeSpan.FromHours(5.5));
+    /// <summary>The same instant the pipeline under test is built with — taken from the factory rather
+    /// than restated, so test data and pipeline-internal dates cannot drift apart if one is changed.</summary>
+    private static readonly DateTimeOffset Now = EnquiryPipelineFactory.Now;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private const int ShreejiEnquiryId = 1;
 
@@ -544,38 +546,8 @@ public class EnquiryPipelineTests(RepositoryFixture fixture)
 
     private EnquiryPipeline BuildPipeline(
         IChatClient chatClient, int tokenBudget = 20_000, int maxToolCalls = 8, int intakeMaxToolCalls = 2,
-        string? intakeModel = null, string? intakeImageModel = null)
-    {
-        var timeProvider = new FixedTimeProvider(Now);
-        var customerTools = new CustomerTools(fixture.Customers, fixture.OrderHistory);
-        var catalogTools = new CatalogTools(fixture.Catalog);
-        var stockTools = new StockTools(fixture.Stock, timeProvider);
-        var pricingTools = new PricingTools(fixture.Customers, fixture.Catalog, fixture.Stock, fixture.PriceRules, timeProvider);
-        var readTools = new ReadToolRegistry(customerTools, catalogTools, stockTools, pricingTools);
-        var writeTools = new QuoteWriteTools(fixture.Quotes, fixture.Enquiries, timeProvider);
-        var options = new LlmOptions { Endpoint = "https://example.test/", ApiKey = "unused", Model = "stub", MaxToolCalls = maxToolCalls, IntakeMaxToolCalls = intakeMaxToolCalls, TokenBudget = tokenBudget, IntakeModel = intakeModel, IntakeImageModel = intakeImageModel };
-        var checkpointStore = new SqlCheckpointStore(fixture.Checkpoints, timeProvider);
-
-        // One shared stub instance for every stage — its ordered turns assume Intake, Resolve and
-        // Narrate all draw from the same script, exactly as they did before per-stage model routing.
-        var chatClients = new ChatClientRegistry(options, _ => chatClient, loggerFactory: null);
-
-        return new EnquiryPipeline(
-            fixture.Enquiries,
-            fixture.AgentRuns,
-            readTools,
-            pricingTools,
-            writeTools,
-            fixture.Quotes,
-            fixture.Catalog,
-            fixture.Customers,
-            chatClients,
-            new PromptLibrary(),
-            options,
-            checkpointStore,
-            timeProvider,
-            NullLogger<EnquiryPipeline>.Instance);
-    }
+        string? intakeModel = null, string? intakeImageModel = null) =>
+        EnquiryPipelineFactory.Build(fixture, chatClient, tokenBudget, maxToolCalls, intakeMaxToolCalls, intakeModel, intakeImageModel);
 
     private static async Task<List<AgentEvent>> CollectAsync(IAsyncEnumerable<AgentEvent> events)
     {

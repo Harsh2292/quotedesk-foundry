@@ -112,4 +112,28 @@ public sealed class LlmOptions
     /// tasks/task-foundry-03-intake-agent.md's Notes on completion.
     /// </summary>
     public bool UseStructuredOutput { get; init; } = true;
+
+    /// <summary>
+    /// Whether agent OpenTelemetry spans carry the prompts and model replies themselves
+    /// (<c>gen_ai.input.messages</c> / <c>gen_ai.output.messages</c>) rather than only timings, token
+    /// counts and tool names. Off by default, because turning it on means an enquiry's text — a real
+    /// customer's words — is written into Application Insights.
+    ///
+    /// It is nonetheless on for this project's own local runs, and the submission document says so
+    /// plainly: Foundry's quality evaluators (task foundry-07) read exactly those two attributes, and
+    /// score <c>None</c> for every trace that omits them. There is no way to have trace-based
+    /// evaluation without it. A production deployment for a real distributor would weigh that
+    /// differently, and the switch is config precisely so it can.
+    ///
+    /// <para>
+    /// <b>This never covers a photograph, whatever it is set to.</b> The message serializer writes a
+    /// <c>DataContent</c> part into <c>gen_ai.input.messages</c> as its complete base64 payload, so an
+    /// enquiry with a photo would otherwise put a customer's image into Application Insights —
+    /// something none of the other image safeguards would catch, since they guard checkpoints and API
+    /// responses, a different path entirely. <c>IntakeExecutor</c> therefore forces capture off for the
+    /// one call that carries an image. A base64 blob tells a text judge nothing, so almost nothing is
+    /// lost. Found in the foundry-06 security review.
+    /// </para>
+    /// </summary>
+    public bool TraceSensitiveData { get; init; }
 }

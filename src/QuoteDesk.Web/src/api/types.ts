@@ -90,6 +90,17 @@ export interface PricedQuoteLine {
   quantity: number
   listPrice: number
   discountPct: number
+  /**
+   * The quantity-slab and customer-tier halves of {@link discountPct}, and whether the 15% combined
+   * cap reduced their sum. The server sends all three from task foundry-05 onward; they exist so the
+   * narration can cite the rule behind a discount against the quotation policy rather than derive
+   * it. Optional because a trace stored before foundry-05 — replayed by the trace panel from
+   * `AgentRuns.TraceJson`, or shipped as a recorded fixture — genuinely has no value for them.
+   * The card renders the combined `discountPct`; the breakdown is narration's, not the table's.
+   */
+  slabDiscountPct?: number
+  tierDiscountPct?: number
+  discountCapped?: boolean
   netUnitPrice: number
   lineTotal: number
   /** The line is outside policy (margin floor) and needs a human override. Shown red on the card. */

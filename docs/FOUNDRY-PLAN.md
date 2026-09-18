@@ -167,6 +167,19 @@ regional quota, and doesn't support custom guardrails/content-filter policies or
 
 **`foundry-02` can start now — nothing further is blocked on Harsh's Azure portal work.**
 
+**Both endpoints, and which is which (recorded 2026-09-18, because they get confused every time):**
+
+| Endpoint | Value | Used for |
+|---|---|---|
+| **Resource** | `https://pharshin29-2918-resource.services.ai.azure.com/openai/v1/` | **Inference.** `Llm:Endpoint`. This is the one that works for chat completions; live runs on 2026-09-18 used it. |
+| **Project** | `https://pharshin29-2918-resource.services.ai.azure.com/api/projects/pharshin29-2918` | **The Foundry SDK** — `Azure.AI.Projects` evaluation runs in `foundry-07`. Recorded as `Foundry:ProjectEndpoint` in `appsettings.json` (not a secret). Returns 404 for chat completions; never put it in `Llm:Endpoint`. |
+
+**Second key exposure, 2026-09-18.** An API key was again pasted in plaintext into a chat session. It
+was not written to any file. Regenerate it in the portal (Keys and Endpoint → Regenerate) as routine
+hygiene — a key that has been in a transcript should be treated as spent, independently of what was
+done with it. The key belongs only in `dotnet user-secrets`, never in `appsettings.json` or any
+document in this repo.
+
 ---
 
 ## Step 1 — Fork mechanics (done 13 Sep)
@@ -304,13 +317,32 @@ The base64-over-JSON design:
 - Estimated effect when built: Intake roughly +2–5 s for a multi-photo enquiry (to be measured); batch of
   5 ≈ 5 × one run, with cards landing as each finishes.
 
-### 4d. Quotation Policy grounding
+### 4d. Quotation Policy grounding — ✅ done 2026-09-18 (foundry-05)
 
 - `Prompts/quotation-policy.md` — the real rules from `docs/DOMAIN.md` (slab ladder, tier discounts, 15%
   cap, 10% margin floor, freight, 15-day validity), with a version line. Add it to `PromptLibrary`.
 - Narrate's instructions include it, and the prompt says to cite policy when explaining a discount.
   **The numbers still come only from `QuoteDesk.Domain`** — the model quotes policy, it never computes.
-- **Blocked on module 6 (orchestration) summary** — see the Compliance audit's open risk.
+- ~~**Blocked on module 6 (orchestration) summary**~~ — retired: module 5 and the module 8 brief are
+  confirmed to be the complete course material.
+
+**Built as designed, plus one thing the design needed and did not name.** Citing "the 200-or-more slab
+plus tier B" requires knowing which rung 250 units lands on and that the split is 6% + 2% — leaving the
+model to work that out is arithmetic on money in order to explain money. So `PricingEngine` now reports
+the `SlabDiscountPct`/`TierDiscountPct`/`DiscountCapped` it already computed and used to discard,
+carried through `PricedQuoteLine`, joined by `ResolutionResult.CustomerTier` read from the customer
+record in code. The model cites; it never adds. `QuotationPolicyGroundingTests` asserts every number in
+the shipped document against `QuoteDesk.Domain`'s constants, so the knowledge source cannot drift from
+the code it describes. Full detail in `docs/SPEC.md` §7 and the task file's notes.
+
+**A finding worth carrying into the submission document.** Attaching a knowledge source made the
+narration *worse* before it made it better: the first live run cited policy correctly but grew to nine
+sentences, read the whole line table back, and cited the 15% combined cap on a line that was never
+capped. Grounding hands a model more material it wants to use, so the prompt has to push back just as
+hard on shape as on substance — `narrate.md` now leads with the output's shape, allows at most one
+cited rule and only one that actually fired, and carries that bad output as a worked counter-example.
+This is a concrete "key lessons learned" item (required by the Founderz rules) backed by two real runs
+rather than a platitude.
 
 ---
 

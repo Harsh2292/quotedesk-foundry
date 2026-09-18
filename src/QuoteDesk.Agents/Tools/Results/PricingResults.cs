@@ -21,6 +21,24 @@ public sealed record PricedQuoteLine
     public required int Quantity { get; init; }
     public required decimal ListPrice { get; init; }
     public required decimal DiscountPct { get; init; }
+
+    /// <summary>The quantity-slab and customer-tier components of <see cref="DiscountPct"/>, and
+    /// whether the 15% combined cap reduced their sum — carried through from
+    /// <see cref="QuoteDesk.Domain.PricedLine"/> so the narration can cite the rule behind a discount
+    /// (Prompts/quotation-policy.md) instead of inferring it. Neither is a cost or a margin figure;
+    /// both are ordinary commercial terms a customer is told (task foundry-05).</summary>
+    /// <remarks><c>required</c>, matching <see cref="QuoteDesk.Domain.PricedLine"/>: left optional, a
+    /// call site that forgot to map them would produce <c>0m</c>/<c>0m</c> — indistinguishable from a
+    /// line that genuinely earned no discount, and so a silently wrong citation rather than a build
+    /// error (code review, 2026-09-18).</remarks>
+    public required decimal SlabDiscountPct { get; init; }
+
+    /// <inheritdoc cref="SlabDiscountPct"/>
+    public required decimal TierDiscountPct { get; init; }
+
+    /// <inheritdoc cref="SlabDiscountPct"/>
+    public required bool DiscountCapped { get; init; }
+
     public required decimal NetUnitPrice { get; init; }
     public required decimal LineTotal { get; init; }
     public required bool RequiresOverride { get; init; }

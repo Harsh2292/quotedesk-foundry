@@ -93,4 +93,85 @@ them is the next task.
 
 ## Notes on completion
 
-*(fill in once run)*
+**Code half done 2026-09-18; the portal half is Harsh's and is what remains.**
+
+**Package:** `Azure.Monitor.OpenTelemetry.AspNetCore` **1.6.0** added to `QuoteDesk.Api` — the version
+NuGet resolved, clean under `-warnaserror` (no `NU1903` advisory, which is what ruled
+`Microsoft.AspNetCore.OpenApi` out back in task 01). Named in `docs/FOUNDRY-PLAN.md` Step 3 already.
+
+**Stable agent identity.** `AgentIdentity` and `AgentInstrumentation` (new,
+`src/QuoteDesk.Agents/Pipeline/AgentInstrumentation.cs`) hold the three ids —
+`quotedesk-intake:1`, `quotedesk-resolve:1`, `quotedesk-narrate:1` — and the single
+`.AsBuilder().UseOpenTelemetry(...)` wrapping. `ResolveExecutor` had to move from
+`AsAIAgent(instructions:, name:, …)` to the `ChatClientAgentOptions` overload, because only that one
+can set `Id`. Narrate is given an id too, though it is not registered in the portal: it makes no
+decision worth evaluating, but anonymous spans are worse than attributable ones.
+
+**Why this was worth a dedicated test.** The failure mode is silent — with no explicit `Id`, MAF
+generates a fresh random one per `ChatClientAgent`, QuoteDesk builds its agents per run, and every run
+would appear in Foundry as a new agent that ran once. Nothing throws; the Traces tab is simply empty
+for the registered agent. `AgentTelemetryTests` therefore attaches an `ActivityListener` to the
+`QuoteDesk.Agents` source, runs the pipeline **twice**, and asserts the `gen_ai.agent.id` values from
+the second run equal the first and are the registered ids — the acceptance criterion's own wording,
+rather than reading the id back off the options object, which would pass even if the framework never
+used it. (Extracted `EnquiryPipelineFactory` so that test builds the pipeline identically to
+`EnquiryPipelineTests`, rather than a near-copy that could drift.)
+
+**Instrumented once, deliberately.** `OpenTelemetryAgent` auto-wires the inner chat client's telemetry
+— confirmed in the installed 1.19.0 XML docs, whose `autoWireChatClient` parameter defaults on and
+skips an already-instrumented client. Adding `UseOpenTelemetry` to `ChatClientRegistry` as well is the
+obvious-looking way to "make sure" model calls are traced and would double every span.
+
+**Inert without Azure, and that is load-bearing.** `Program.cs` registers the OpenTelemetry pipeline
+only when `AzureMonitor:ConnectionString` is non-empty. Registering nothing is a stronger guarantee
+than registering an exporter with nowhere to send: CI, the integration suite and any local run stay
+fully offline. Verified — 224 unit + 85 integration tests pass with no Azure settings configured.
+
+### Workflow shape: unchanged — version-stamping stays in Extras (extra-05)
+
+Branch 3 of this task file. Checked against the installed package rather than assumed:
+`Microsoft.Agents.AI.Workflows.Checkpointing.TypeId.IsMatch` compares **the simple assembly name and
+the type's full name** (its own XML docs say so explicitly, and that version, culture and public key
+token are ignored). Nothing this task changed touches any of that:
+
+- Executor ids are still the literals `"Intake"`, `"Resolve"`, `"Price"`, `"Approve"`.
+- Executor type names and assembly are unchanged — the added `bool traceSensitiveData` constructor
+  parameter is not part of a `TypeId`.
+- Edges are unchanged.
+- **`WorkflowBuilder.WithOpenTelemetry` was deliberately not added.** It was the one item that could
+  plausibly wrap executors and so change the shape, and its XML docs do not say either way. It is
+  listed as "optional, cheap" here, but it is only cheap if it is free — and the alternative branch
+  costs an EF migration, a startup sweep and a guard test. Agent-level spans already carry everything
+  Foundry's registration and trace evaluation read. Revisit in extra-05 with a decompile, not a guess.
+
+**Still to confirm empirically:** the 15 runs sitting at `pending_approval` in the local dev database
+predate this change. The reasoning above says they will still approve; the cheap confirmation is
+clicking Approve on one in the UI. Not done here, because it writes a real quote row to Harsh's dev
+database and the check is his to spend.
+
+## What is left, and it needs Harsh
+
+None of this can be done from a terminal — it is portal clicks and a credential.
+
+1. **Connect Application Insights** — Foundry project → Agents → Traces → Connect.
+2. **Grant roles** — Foundry User for Harsh; **Log Analytics Reader** for the project's managed
+   identity on the App Insights resource *and* its workspace. Trace-based evaluation (foundry-07)
+   fails without this second one.
+3. **Set the connection string locally:**
+   `dotnet user-secrets set "AzureMonitor:ConnectionString" "<the App Insights connection string>" --project src/QuoteDesk.Api`
+4. **Turn on sensitive data locally:**
+   `dotnet user-secrets set "Llm:TraceSensitiveData" "true" --project src/QuoteDesk.Api`
+   Without it, spans carry no `gen_ai.input.messages`/`output.messages` and every Foundry quality
+   evaluator scores `None`. This is the documented trade-off, not an oversight.
+5. **Run one enquiry** through the Desk, wait 2–5 minutes for ingestion.
+6. **Register both agents** — Foundry → Build → Agents → New agent → **Link external agent**, twice:
+   `quotedesk-intake` with OTel id `quotedesk-intake:1`, and `quotedesk-resolve` with
+   `quotedesk-resolve:1`.
+7. **Open each agent's Traces tab, confirm spans, and screenshot both now** — not on video day.
+
+**A correction worth carrying into the submission document:** Foundry **guardrails / content-filter
+policies do not apply here**, because the models are called through instant access (preview), which
+`docs/FOUNDRY-PLAN.md` Step 0 already records as not supporting custom guardrails. QuoteDesk's actual
+guardrails are in code — the human approval gate, write tools unreachable from Resolve, untrusted-
+content wrapping, deterministic pricing — and they are visible in the in-app trace panel, not in the
+portal. Say that plainly rather than implying the platform provides them.

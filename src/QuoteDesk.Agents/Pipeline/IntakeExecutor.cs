@@ -29,6 +29,7 @@ public sealed class IntakeExecutor(
     ReasoningOptions? reasoning,
     int maxToolCalls,
     ToolCallBudget budget,
+    bool traceSensitiveData,
     ILogger logger)
     : Executor<EnquiryInput, ExtractionResult>(id, options: null, declareCrossRunShareable: false)
 {
@@ -50,11 +51,32 @@ public sealed class IntakeExecutor(
             .UseFunctionInvocation(configure: c => c.MaximumIterationsPerRequest = maxToolCalls)
             .Build();
 
-        var agent = chatClient.AsAIAgent(new ChatClientAgentOptions
-        {
-            Name = "Intake",
-            ChatOptions = new ChatOptions { Instructions = instructions, Tools = tracedTools, Reasoning = reasoning },
-        });
+        // Sensitive-data capture is switched off for the one call that carries a photograph, even when
+        // it is otherwise on. `Microsoft.Extensions.AI`'s message serializer writes a `DataContent`
+        // part into `gen_ai.input.messages` as its full base64 payload, and `OpenTelemetryAgent`
+        // propagates this flag to the chat client it auto-wires — so without this, turning on
+        // `Llm:TraceSensitiveData` for evaluation would ship a customer's photo, in full, into
+        // Application Insights (found in the foundry-06 security review, confirmed by decompiling the
+        // installed 10.9.0 and 1.19.0 assemblies).
+        //
+        // Every other protection around the image operates on a different path entirely — stripped
+        // from checkpoints, absent from `EnquiryDetailResponse`, served only by a dedicated endpoint —
+        // and none of them apply here. Losing message capture on photo runs costs little: a base64
+        // blob tells a text judge nothing, foundry-07's dataset run (Run A) grades the photo case from
+        // captured responses rather than traces, and the image is stripped before Resolve and Price,
+        // so only this one span is affected.
+        var captureMessages = traceSensitiveData && message.ImageDataUrl is null;
+
+        // An explicit, stable Id — not the random one a ChatClientAgent generates per instance — so
+        // two runs' spans attribute to the same registered Foundry agent (task foundry-06).
+        var agent = AgentInstrumentation.Instrument(
+            chatClient.AsAIAgent(new ChatClientAgentOptions
+            {
+                Id = AgentIdentity.Intake.Id,
+                Name = AgentIdentity.Intake.Name,
+                ChatOptions = new ChatOptions { Instructions = instructions, Tools = tracedTools, Reasoning = reasoning },
+            }),
+            captureMessages);
 
         // Schema-enforced output is off for the same reason as Resolve: this stage can now call a tool,
         // and a strict response format would apply to the tool-call turns too, not just the final JSON.

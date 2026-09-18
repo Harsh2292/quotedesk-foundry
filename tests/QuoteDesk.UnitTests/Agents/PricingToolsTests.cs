@@ -29,6 +29,13 @@ public class PricingToolsTests
         line.DiscountPct.Should().Be(0.08m, "200+ slab (6%) plus tier B (2%) per docs/DOMAIN.md");
         line.NetUnitPrice.Should().Be(230.00m);
         line.RequiresOverride.Should().BeFalse("14% margin clears the 10% floor");
+
+        // The components reach the tool result too, not only PricedLine — this is what the narration
+        // cites against Prompts/quotation-policy.md, so a mapping that dropped them would silently
+        // leave the model to derive the split itself (task foundry-05).
+        line.SlabDiscountPct.Should().Be(0.06m);
+        line.TierDiscountPct.Should().Be(0.02m);
+        line.DiscountCapped.Should().BeFalse();
     }
 
     [Fact]
