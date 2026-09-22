@@ -111,15 +111,18 @@ public class AgentTelemetryTests(RepositoryFixture fixture)
     }
 
     /// <summary>
-    /// The other half of the same guarantee: the ids are written <c>name:version</c>, which is the
-    /// shape Foundry's external-agent registration and its trace-based evaluation expect. A rename
-    /// that quietly dropped the version suffix would register fine and evaluate against nothing.
+    /// The other half of the same guarantee: these exact strings are typed into the Foundry portal when
+    /// the agents are registered, and Foundry matches telemetry on <c>gen_ai.agent.id == otel_agent_id</c>.
+    /// Pinned literally, because a rename here without the matching change in the portal registers fine
+    /// and then evaluates against nothing at all. The <c>name-vN</c> form follows Microsoft's own
+    /// documented example (<c>travel-planner-agent-v1</c>); an earlier colon form was this project's
+    /// invention and was corrected on 2026-09-22.
     /// </summary>
     [Theory]
-    [InlineData("quotedesk-intake:1")]
-    [InlineData("quotedesk-resolve:1")]
-    [InlineData("quotedesk-narrate:1")]
-    public void RegisteredAgentIds_AreWrittenNameColonVersion(string expected)
+    [InlineData("quotedesk-intake-v1")]
+    [InlineData("quotedesk-resolve-v1")]
+    [InlineData("quotedesk-narrate-v1")]
+    public void RegisteredAgentIds_MatchTheValuesTypedIntoTheFoundryPortal(string expected)
     {
         new[] { AgentIdentity.Intake, AgentIdentity.Resolve, AgentIdentity.Narrate }
             .Select(a => a.Id)
@@ -127,11 +130,12 @@ public class AgentTelemetryTests(RepositoryFixture fixture)
     }
 
     [Fact]
-    public void AgentIdentities_NameMatchesTheIdWithoutItsVersion()
+    public void AgentIdentities_IdIsTheNamePlusAVersionSuffix()
     {
         foreach (var identity in new[] { AgentIdentity.Intake, AgentIdentity.Resolve, AgentIdentity.Narrate })
         {
-            identity.Id.Should().StartWith($"{identity.Name}:");
+            identity.Id.Should().StartWith($"{identity.Name}-v", "the id is the agent's name plus a version suffix");
+            identity.Id.Should().MatchRegex(@"^[A-Za-z0-9_-]+$", "Foundry constrains agent names to alphanumerics, hyphens and underscores");
         }
     }
 

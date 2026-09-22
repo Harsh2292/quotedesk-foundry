@@ -16,26 +16,35 @@ namespace QuoteDesk.Agents.Pipeline;
 /// </para>
 ///
 /// <para>
-/// The ids are written <c>name:version</c>, which is the form Foundry's external-agent registration
-/// and its trace-based evaluation expect. Bump the version half deliberately when an agent's role
-/// changes enough that its old traces should not be pooled with its new ones — that is a judgement
-/// about continuity, not a mechanical consequence of editing a prompt.
+/// The ids are written <c>name-vN</c>, matching the convention Microsoft's own external-agent
+/// documentation uses for <c>otel_agent_id</c> — its worked example is <c>travel-planner-agent-v1</c>,
+/// and it constrains agent names to alphanumerics, hyphens and underscores. An earlier version of this
+/// file used <c>name:version</c> with a colon; that form was this project's own invention, appears
+/// nowhere in the documentation, and risked the worst failure mode available here — a registration
+/// that silently matches no spans, leaving an empty Traces tab and no error to explain it.
+/// </para>
+///
+/// <para>
+/// Foundry matches a registered agent to its telemetry on <c>gen_ai.agent.id == otel_agent_id</c>, so
+/// the value registered in the portal must equal the <see cref="Id"/> below character for character.
+/// Bump the version suffix deliberately when an agent's role changes enough that its old traces should
+/// not be pooled with its new ones — a judgement about continuity, not a consequence of editing a prompt.
 /// </para>
 /// </summary>
 public sealed record AgentIdentity(string Id, string Name)
 {
     /// <summary>Perceives: reads the enquiry text or photograph, and may check one unclear word
     /// against the catalogue.</summary>
-    public static readonly AgentIdentity Intake = new("quotedesk-intake:1", "quotedesk-intake");
+    public static readonly AgentIdentity Intake = new("quotedesk-intake-v1", "quotedesk-intake");
 
     /// <summary>Decides: the one autonomous node, choosing its own lookups over the catalogue and
     /// this customer's history.</summary>
-    public static readonly AgentIdentity Resolve = new("quotedesk-resolve:1", "quotedesk-resolve");
+    public static readonly AgentIdentity Resolve = new("quotedesk-resolve-v1", "quotedesk-resolve");
 
     /// <summary>Explains: writes one grounded sentence from numbers QuoteDesk.Domain already
     /// computed. Not registered in the portal — it makes no decision to evaluate — but it is given an
     /// id anyway so its spans are attributable rather than anonymous.</summary>
-    public static readonly AgentIdentity Narrate = new("quotedesk-narrate:1", "quotedesk-narrate");
+    public static readonly AgentIdentity Narrate = new("quotedesk-narrate-v1", "quotedesk-narrate");
 }
 
 /// <summary>

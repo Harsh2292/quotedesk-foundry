@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" width="980" height="560" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="QuoteDesk agent architecture: a fixed pipeline of six stages, of which two are agents, three are deterministic code, and one is a human approval gate.">
+  <title>Figure 1 — Agent architecture and information flow</title>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrowLight" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="980" height="560" fill="#ffffff"/>
+
+  <!-- ===== Legend ===== -->
+  <g transform="translate(24,18)">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="21" y="12" font-size="12.5" fill="#334155">Agent — a model decides</text>
+
+    <rect x="196" y="0" width="14" height="14" rx="3" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+    <text x="217" y="12" font-size="12.5" fill="#334155">Deterministic C# — no model</text>
+
+    <rect x="416" y="0" width="14" height="14" rx="3" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+    <text x="437" y="12" font-size="12.5" fill="#334155">Human</text>
+
+    <rect x="516" y="0" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="537" y="12" font-size="12.5" fill="#334155">Tool (read-only)</text>
+
+    <rect x="660" y="0" width="14" height="14" rx="3" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="681" y="12" font-size="12.5" fill="#334155">Knowledge source</text>
+  </g>
+
+  <!-- ===== The pipeline strip ===== -->
+  <text x="24" y="70" font-size="13" font-weight="600" fill="#0f172a">A fixed pipeline. The sequence never reorders, never skips, never stops early.</text>
+
+  <!-- Intake -->
+  <g>
+    <rect x="24" y="86" width="150" height="72" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+    <text x="99" y="110" font-size="14.5" font-weight="700" fill="#4c1d95" text-anchor="middle">1 · Intake</text>
+    <text x="99" y="128" font-size="11.5" fill="#5b21b6" text-anchor="middle">perceives</text>
+    <text x="99" y="146" font-size="10.5" fill="#6d28d9" text-anchor="middle">gpt-5-nano / -mini</text>
+  </g>
+
+  <!-- Resolve -->
+  <g>
+    <rect x="204" y="86" width="150" height="72" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+    <text x="279" y="110" font-size="14.5" font-weight="700" fill="#4c1d95" text-anchor="middle">2 · Resolve</text>
+    <text x="279" y="128" font-size="11.5" fill="#5b21b6" text-anchor="middle">decides — autonomous</text>
+    <text x="279" y="146" font-size="10.5" fill="#6d28d9" text-anchor="middle">gpt-5-mini</text>
+  </g>
+
+  <!-- Price -->
+  <g>
+    <rect x="384" y="86" width="150" height="72" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+    <text x="459" y="110" font-size="14.5" font-weight="700" fill="#065f46" text-anchor="middle">3 · Price</text>
+    <text x="459" y="128" font-size="11.5" fill="#047857" text-anchor="middle">computes the money</text>
+    <text x="459" y="146" font-size="10.5" fill="#059669" text-anchor="middle">QuoteDesk.Domain</text>
+  </g>
+
+  <!-- Approve -->
+  <g>
+    <rect x="564" y="86" width="150" height="72" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="639" y="110" font-size="14.5" font-weight="700" fill="#9a3412" text-anchor="middle">4 · Approve</text>
+    <text x="639" y="128" font-size="11.5" fill="#c2410c" text-anchor="middle">a salesperson</text>
+    <text x="639" y="146" font-size="10.5" fill="#ea580c" text-anchor="middle">run pauses here</text>
+  </g>
+
+  <!-- Create / Send -->
+  <g>
+    <rect x="744" y="86" width="212" height="72" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+    <text x="850" y="110" font-size="14.5" font-weight="700" fill="#065f46" text-anchor="middle">5 · Create → 6 · Send</text>
+    <text x="850" y="128" font-size="11.5" fill="#047857" text-anchor="middle">the only writes in the system</text>
+    <text x="850" y="146" font-size="10.5" fill="#059669" text-anchor="middle">unreachable before step 4</text>
+  </g>
+
+  <!-- arrows between stages -->
+  <line x1="176" y1="122" x2="200" y2="122" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="356" y1="122" x2="380" y2="122" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="536" y1="122" x2="560" y2="122" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="716" y1="122" x2="740" y2="122" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- contracts passed -->
+  <text x="190" y="176" font-size="10" fill="#64748b" text-anchor="middle">Extraction</text>
+  <text x="190" y="188" font-size="10" fill="#64748b" text-anchor="middle">Result</text>
+  <text x="370" y="176" font-size="10" fill="#64748b" text-anchor="middle">Resolution</text>
+  <text x="370" y="188" font-size="10" fill="#64748b" text-anchor="middle">Result</text>
+  <text x="550" y="176" font-size="10" fill="#64748b" text-anchor="middle">Approval</text>
+  <text x="550" y="188" font-size="10" fill="#64748b" text-anchor="middle">Request</text>
+  <text x="730" y="176" font-size="10" fill="#64748b" text-anchor="middle">Approval</text>
+  <text x="730" y="188" font-size="10" fill="#64748b" text-anchor="middle">Decision</text>
+
+  <text x="24" y="210" font-size="11" fill="#64748b">Typed C# contracts between every stage — each one a compile-time boundary, not a free-text handoff.</text>
+
+  <!-- ===== Tools and knowledge ===== -->
+  <line x1="24" y1="230" x2="956" y2="230" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Intake's tool -->
+  <g>
+    <rect x="24" y="252" width="150" height="40" rx="6" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="99" y="270" font-size="11" font-weight="600" fill="#334155" text-anchor="middle">verify_catalogue_term</text>
+    <text x="99" y="284" font-size="9.5" fill="#64748b" text-anchor="middle">"is this a real word here?"</text>
+  </g>
+  <line x1="99" y1="160" x2="99" y2="248" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrowLight)"/>
+
+  <!-- Resolve's tools -->
+  <g>
+    <rect x="204" y="252" width="150" height="40" rx="6" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="279" y="269" font-size="11" font-weight="600" fill="#334155" text-anchor="middle">resolve_customer</text>
+    <text x="279" y="284" font-size="11" font-weight="600" fill="#334155" text-anchor="middle">search_catalog</text>
+
+    <rect x="204" y="300" width="150" height="40" rx="6" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+    <text x="279" y="317" font-size="11" font-weight="600" fill="#334155" text-anchor="middle">get_customer_history</text>
+    <text x="279" y="332" font-size="11" font-weight="600" fill="#334155" text-anchor="middle">check_stock</text>
+  </g>
+  <line x1="279" y1="160" x2="279" y2="248" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrowLight)"/>
+  <text x="362" y="296" font-size="9.5" fill="#64748b">Resolve chooses which,</text>
+  <text x="362" y="308" font-size="9.5" fill="#64748b">in what order, how many</text>
+  <text x="362" y="320" font-size="9.5" fill="#64748b">times. Nobody scripts it.</text>
+
+  <!-- knowledge source -->
+  <g>
+    <rect x="384" y="252" width="150" height="40" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+    <text x="459" y="270" font-size="11" font-weight="600" fill="#1e3a8a" text-anchor="middle">Quotation Policy v1</text>
+    <text x="459" y="284" font-size="9.5" fill="#2563eb" text-anchor="middle">cited, never computed from</text>
+  </g>
+  <line x1="459" y1="160" x2="459" y2="248" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrowLight)"/>
+
+  <!-- data layer -->
+  <g>
+    <rect x="24" y="360" width="510" height="44" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="279" y="379" font-size="11.5" font-weight="600" fill="#334155" text-anchor="middle">SQL Server via EF Core — catalogue · stock · price rules · customers · order history</text>
+    <text x="279" y="395" font-size="10" fill="#64748b" text-anchor="middle">No raw SQL from a model. No vector database — the data is structured; embeddings would be the wrong tool.</text>
+  </g>
+  <line x1="279" y1="342" x2="279" y2="356" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowLight)"/>
+
+  <!-- ===== The rule ===== -->
+  <g>
+    <rect x="564" y="252" width="392" height="152" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+    <text x="584" y="276" font-size="13" font-weight="700" fill="#713f12">The rule the code enforces, not promises</text>
+    <text x="584" y="300" font-size="11.5" fill="#854d0e">The model never decides money. Pricing, discounts,</text>
+    <text x="584" y="317" font-size="11.5" fill="#854d0e">margin and delivery dates are computed in plain C#.</text>
+    <text x="584" y="334" font-size="11.5" fill="#854d0e">The model explains the result; it never produces it.</text>
+    <text x="584" y="360" font-size="10.5" fill="#a16207">Structural, not advisory: price_quote is not in either</text>
+    <text x="584" y="375" font-size="10.5" fill="#a16207">agent's tool list, the write tools are unreachable before</text>
+    <text x="584" y="390" font-size="10.5" fill="#a16207">the human gate, and cost and margin never enter a prompt.</text>
+  </g>
+
+  <!-- ===== Where autonomy sits ===== -->
+  <g>
+    <rect x="24" y="428" width="932" height="108" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="44" y="452" font-size="13" font-weight="700" fill="#0f172a">Why two agents, and why only two</text>
+    <text x="44" y="474" font-size="11.5" fill="#334155">They are split by <tspan font-weight="600">cognitive role</tspan>, not by subject matter. <tspan font-weight="600">Intake perceives</tspan> — it reads messy text or a photograph and may check one</text>
+    <text x="44" y="491" font-size="11.5" fill="#334155">unclear word against the catalogue. <tspan font-weight="600">Resolve decides</tspan> — it weighs candidates against this customer's history and judges whether a</text>
+    <text x="44" y="508" font-size="11.5" fill="#334155">match is confident enough to commit to. Splitting them this way keeps each agent's failure mode separable: a misreading is Intake's,</text>
+    <text x="44" y="525" font-size="11.5" fill="#334155">a wrong judgement is Resolve's. A single agent doing both makes every failure look the same from the outside.</text>
+  </g>
+</svg>

@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QuoteDesk on Microsoft Foundry — Agent-a-Thon submission</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; max-width: 900px; padding: 48px 40px 80px;
+    font-family: "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 11.5pt; line-height: 1.55; color: #1e293b; background: #fff;
+  }
+  h1 { font-size: 26pt; line-height: 1.15; margin: 0 0 6px; color: #0f172a; letter-spacing: -0.01em; }
+  h2 { font-size: 16pt; margin: 40px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; color: #0f172a; }
+  h3 { font-size: 12.5pt; margin: 26px 0 6px; color: #1e293b; }
+  h4 { font-size: 11.5pt; margin: 18px 0 4px; color: #334155; }
+  p { margin: 0 0 11px; }
+  ul, ol { margin: 0 0 11px; padding-left: 22px; }
+  li { margin-bottom: 5px; }
+  code { font-family: Consolas, "SF Mono", monospace; font-size: 0.9em; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; }
+  figure { margin: 22px 0; page-break-inside: avoid; }
+  figure img { width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px; }
+  figcaption { font-size: 9.5pt; color: #64748b; margin-top: 7px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 18px; font-size: 10pt; }
+  th, td { border: 1px solid #e2e8f0; padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { background: #f8fafc; font-weight: 600; color: #0f172a; }
+  blockquote { margin: 14px 0; padding: 10px 16px; border-left: 3px solid #cbd5e1; background: #f8fafc; color: #334155; font-style: italic; }
+  .lede { font-size: 13pt; color: #334155; margin-bottom: 4px; }
+  .meta { font-size: 9.5pt; color: #64748b; margin-bottom: 26px; }
+  .callout { border: 1px solid #fde68a; background: #fffbeb; border-radius: 6px; padding: 13px 16px; margin: 18px 0; page-break-inside: avoid; }
+  .callout strong { color: #92400e; }
+  .todo { border: 1px dashed #f87171; background: #fef2f2; border-radius: 6px; padding: 11px 15px; margin: 14px 0; font-size: 10pt; color: #991b1b; }
+  .rule { border: 1px solid #ddd6fe; background: #f5f3ff; border-radius: 6px; padding: 13px 16px; margin: 18px 0; page-break-inside: avoid; }
+  .quiet { color: #64748b; font-size: 10pt; }
+  @media print {
+    body { padding: 0 8mm; max-width: none; font-size: 10.5pt; }
+    h2 { page-break-after: avoid; } h3, h4 { page-break-after: avoid; }
+    figure, table, .callout, .rule { page-break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>QuoteDesk on Microsoft Foundry</h1>
+<p class="lede">A multi-agent system that turns a messy customer enquiry into a priced, checked quotation — and refuses to guess at the parts a human should decide.</p>
+<p class="meta">Microsoft Agent-a-Thon · Level 3, Architect track · Final activity submission</p>
+
+<div class="todo">
+<strong>Before export — two things to settle.</strong> (1) <strong>Anonymity:</strong> check the Founderz upload form for whether an author name or repository URL may appear. If anonymous, leave this header as-is; if not, add your name here and the repository link in §7. (2) Replace every <em>[screenshot]</em> placeholder and every <em>[to fill]</em> in §2.2 with real values. Then delete this box.
+</div>
+
+<h2>Summary</h2>
+
+<p>A distributor of textile-machinery spares receives enquiries written by people in a hurry, who know the products by nickname rather than part number: <em>"250 nos of the 6203 bearings, same as last time"</em>. Answering one takes a salesperson about twenty minutes of looking things up, and it usually happens that evening. QuoteDesk reads the enquiry — typed or photographed — works out what the customer actually means, prices it against the company's own rules, and puts a complete draft quotation in front of a human in about six minutes.</p>
+
+<p>The architecturally interesting part is not what it decides. It is what it refuses to decide. Two agents are used where the input is genuinely ambiguous; everything with commercial consequences is deterministic C#; and nothing is created or sent until a person approves it. <strong>The model never decides money</strong> — and that is enforced by the shape of the code, not by an instruction in a prompt.</p>
+
+<p>This is a working system, not a design exercise. It runs against Microsoft Foundry models, carries 311 automated tests, and has been through real live runs whose failures shaped the architecture described below.</p>
+
+<h2>1 · Design</h2>
+
+<h3>1.1 The business problem</h3>
+
+<p>The business is a distributor in Surat selling bearings, belts, spindle tapes and gears to textile mills. Sales is one or two people who also handle purchasing and answer the phone. Enquiries arrive by email and, far more often, WhatsApp — frequently as a photograph of a handwritten list rather than typed text.</p>
+
+<p>Each enquiry has to be turned into a quotation: identify what was actually meant, check stock and supplier lead times, apply the company's discount rules, check the margin holds, work out delivery dates, and produce a document that becomes a commercial commitment. Today that is twenty minutes of manual lookup per enquiry, deferred to the end of the day. Half the time the customer phones to chase it first.</p>
+
+<p>Four things in a single real enquiry make this hard, and each one maps to a capability:</p>
+
+<table>
+  <tr><th>In the enquiry</th><th>What it requires</th></tr>
+  <tr><td>"the 6203 bearings (same as last time)"</td><td>Catalogue search <em>plus</em> this customer's order history</td></tr>
+  <tr><td>"the thicker one"</td><td>An ambiguity the system must refuse to guess at</td></tr>
+  <tr><td>"need by 5th"</td><td>Stock on hand versus supplier lead time</td></tr>
+  <tr><td>"last time you gave 8%"</td><td>Pricing rules that can confirm or refuse a customer's expectation</td></tr>
+</table>
+
+<h3>1.2 Intended users</h3>
+
+<p><strong>The primary user is the salesperson</strong> — one of two people at the distributor who currently write every quotation by hand. They are not technical, they are interrupted constantly, and they carry personal responsibility for a document the customer will hold the company to. The system is built for their judgement, not to replace it: every screen is designed around the question <em>"is this right, and what needs my attention?"</em></p>
+
+<p>The secondary user is the customer, who never touches the system but receives the quotation hours earlier than before.</p>
+
+<p><strong>The addressable problem is much wider than one industry.</strong> Nothing in the architecture is specific to textile spares — it applies to any distributor quoting from a catalogue where customers describe products informally and pricing follows company rules. The domain is specific; the shape of the problem is not.</p>
+
+<h3>1.3 The specialised agents</h3>
+
+<p>There are two registered agents, and they are split by <strong>cognitive role</strong> rather than by subject matter. This distinction is the core design decision.</p>
+
+<table>
+  <tr><th></th><th>Intake Agent — <em>perceives</em></th><th>Resolve Agent — <em>decides</em></th></tr>
+  <tr><th>Responsibility</th>
+      <td>Turn a messy enquiry — typed text or a photograph — into structured lines with quantities and units.</td>
+      <td>Work out which catalogue item each line actually means, and judge whether that answer is confident enough to commit to.</td></tr>
+  <tr><th>Autonomy</th>
+      <td>Low. One optional tool call, only when a word is genuinely unclear.</td>
+      <td>High. It chooses which tools to call, in what order and how many times. Six calls for a messy enquiry, two for a clean one — nobody scripted that.</td></tr>
+  <tr><th>Model</th>
+      <td><code>gpt-5-nano</code> for typed text; <code>gpt-5-mini</code> when a photograph must be read.</td>
+      <td><code>gpt-5-mini</code> — the one call worth paying the more capable model for.</td></tr>
+  <tr><th>Its failure mode</th>
+      <td>Misreading. A word or a quantity read wrongly.</td>
+      <td>Misjudging. Committing to a match that the evidence did not support.</td></tr>
+</table>
+
+<p>A third model call, <strong>Narrate</strong>, writes the one-paragraph summary at the top of the approval screen. It is given an identity and traced, but it is not registered as an agent and makes no decision: it is handed numbers that have already been computed and explains them.</p>
+
+<h3>1.4 Tools, data and knowledge sources</h3>
+
+<p>Each agent's tools are assigned explicitly, one by one. A tool added to the system reaches no agent until someone decides which agent should have it — there is no "give it all the tools" default.</p>
+
+<table>
+  <tr><th>Agent</th><th>Tools</th><th>What it can see</th></tr>
+  <tr><td><strong>Intake</strong></td>
+      <td><code>verify_catalogue_term</code></td>
+      <td>Whether a word is a real catalogue term and which families it appears in. <strong>No SKU, no price.</strong> Intake perceives; it must not be able to identify or price a part.</td></tr>
+  <tr><td><strong>Resolve</strong></td>
+      <td><code>resolve_customer</code>, <code>search_catalog</code>, <code>get_customer_history</code>, <code>check_stock</code></td>
+      <td>Ranked catalogue candidates with confidence, this customer's recent orders, stock and lead times.</td></tr>
+</table>
+
+<p><strong>Data sources.</strong> SQL Server through EF Core: a 300-item catalogue, stock levels and lead times, per-category and per-SKU price rules, 25 customers and roughly 1,200 historical order lines. The model never writes SQL; it calls typed tools whose return shapes are compile-time contracts.</p>
+
+<p><strong>There is deliberately no vector database.</strong> The data is structured — SKUs, quantities, dates, prices — and retrieval is a ranking problem over words, not a semantic-similarity problem. Embeddings would have been the fashionable choice and the wrong tool. Catalogue search is a two-stage ranker: a cheap substring recall, then whole-word re-ranking weighted by inverse document frequency, so a rare distinguishing token like <code>2RS</code> or <code>25mm</code> outweighs a common family word like <code>belt</code>.</p>
+
+<p><strong>The knowledge source</strong> is the company's own <strong>Quotation Policy</strong> — a versioned document stating the quantity-slab ladder, tier discounts, the combined discount cap, the margin floor, freight zones and waiver threshold, GST, delivery-date rules and quote validity. It is given to the Narrate step so an explanation can name the rule that produced a figure instead of simply asserting one.</p>
+
+<div class="rule">
+<p style="margin:0"><strong>The policy grounds the explanation, never the arithmetic.</strong> This is enforced rather than requested: the pricing engine reports the slab percentage, the tier percentage and whether the cap applied as separate values, and hands them to the model already computed. The model cites components it was given; it never adds two percentages together, never works out which slab a quantity falls into, and never derives a tier from a percentage. A test reads every number back out of the shipped policy document and asserts it against the pricing code's own constants, so the knowledge source cannot drift from the system it describes — a document that drifts is worse than none, because it is cited with full confidence.</p>
+</div>
+
+<h3>1.5 Why multi-agent beats a single agent here</h3>
+
+<p>Three reasons, in order of how much they actually matter:</p>
+
+<ol>
+  <li><strong>Separable failure modes.</strong> When one agent both reads and judges, every failure looks identical from the outside: a wrong line. Split by role, a wrong line is traceable to <em>misread</em> or <em>misjudged</em> — which are different bugs with different fixes. This turned out to matter in practice: a live run produced a wrong line that was Intake's misreading of handwriting, not Resolve's judgement, and the trace made that distinction immediately.</li>
+  <li><strong>Different jobs deserve different models.</strong> Reading typed text into JSON needs no judgement; deciding whether a catalogue match is confident enough does. Routing them separately puts the capable model only where it earns its cost, and gives each stage its own rate-limit budget instead of bunching every call into one.</li>
+  <li><strong>Each agent can be evaluated on its own terms.</strong> Intake is graded on whether it read the enquiry correctly; Resolve on whether it resolved and refused appropriately. A single agent yields one blended score that hides which half is weak.</li>
+</ol>
+
+<p>Two agents is also the ceiling, not a starting point. A third agent was designed and rejected — an earlier draft split Customer and Catalogue, which broke the worked example's own disambiguation by putting order history and catalogue search on opposite sides of the split. More agents is not more production-grade; the bar is consistent behaviour, observable execution, measured quality and governance, and two agents clear it.</p>
+
+<h3>1.6 How information flows</h3>
+
+<figure>
+  <img src="diagrams/fig1-architecture.svg" alt="The QuoteDesk pipeline: Intake and Resolve are agents, Price and Create/Send are deterministic C#, Approve is a human. Intake has one tool, Resolve has four, and a Quotation Policy document grounds the narration.">
+  <figcaption><strong>Figure 1 — Agent architecture and information flow.</strong> A fixed pipeline with two autonomous stages. The sequence never reorders, never skips and never stops early; that part is a state machine written in code. Autonomy exists only inside Resolve.</figcaption>
+</figure>
+
+<h2>2 · Production readiness</h2>
+
+<h3>2.1 Observability strategy</h3>
+
+<p>Agent failures are not like ordinary software failures. A conventional API returns a recognisable error code; <strong>an agent can produce a confident but incorrect response</strong>, which is structurally valid, passes every downstream check, and looks entirely normal in the output. That is the case observability has to catch, and it is why the final output alone is never sufficient evidence.</p>
+
+<h4>What is collected</h4>
+
+<p>Every model call and every tool invocation from both agents becomes an OpenTelemetry span, exported to an Application Insights resource connected to the Foundry project. Alongside that, the pipeline emits its own event stream, which drives a live trace panel in the product itself.</p>
+
+<table>
+  <tr><th>Traces — <em>"where did it happen, and why?"</em></th><th>Metrics — <em>"what happened?"</em></th></tr>
+  <tr><td>
+    The enquiry and system instructions · each model call and its output · every tool call with arguments, result and duration · retries · errors
+  </td><td>
+    Per-stage latency · tool calls per run · tool failure rate · tokens per run · error rate by code · <strong>refusal rate</strong> (the share of lines deliberately left unresolved) · approve-versus-reject rate at the human gate
+  </td></tr>
+</table>
+
+<p>The last two are specific to this system and are the ones worth watching. <strong>Refusal rate</strong> is a quality signal in both directions: if it falls, the agent may have started guessing; if it climbs, retrieval has probably degraded. <strong>Approve-versus-reject rate</strong> is the only metric that measures whether the humans actually trust the output.</p>
+
+<div class="callout">
+<p style="margin:0"><strong>One deliberate exclusion.</strong> Capturing message content in traces is required for Foundry's quality evaluators to score anything at all — without the input and output messages they return <em>None</em>. But the message serializer writes an image attachment into a span as its complete base64 payload, which would have put a customer's photograph into Application Insights. Every other safeguard around images in this system guards a different path and would not have caught it. Image content is therefore excluded from traces specifically, and a test asserts it against the spans actually emitted — with a control test proving a text enquiry under the same setting <em>does</em> capture its content, so the guarantee cannot pass vacuously. Almost nothing is lost: a base64 blob tells a text-based judge nothing.</p>
+</div>
+
+<h4>How these insights diagnose real issues</h4>
+
+<p>Three incidents from this project's own history, each found through observability and each fixed. They are written in the shape the evidence actually took: reconstruct the decision path, locate the failure point, connect it to operational impact.</p>
+
+<h4>Incident 1 — a 56 KB tool result that ended a run</h4>
+<ul>
+  <li><strong>Reconstruct:</strong> a run failed against the provider with a context-length error. The trace showed Resolve's tool loop re-sending a single <code>search_catalog</code> result on every turn.</li>
+  <li><strong>Locate:</strong> the result held <strong>342 candidates from a 262-row catalogue</strong>. The scorer matched on letters, not words — a query for a <em>PU</em> belt also matched every s<em>pu</em>r gear, and a query for a <em>ring</em> frame tape matched every bea<em>ring</em> — and nothing capped the output.</li>
+  <li><strong>Impact and fix:</strong> a tool result is paid for three times over (model input, stream, stored trace). Rebuilt as a two-stage ranker with whole-word matching, IDF weighting, confidence floors and a hard cap of five candidates. Order history was capped at the twenty most recent rows for the same reason.</li>
+</ul>
+
+<h4>Incident 2 — 49.6 seconds inside one stage</h4>
+<ul>
+  <li><strong>Reconstruct:</strong> per-stage timestamps on a complete run showed 52.7 s total — Intake 1.7 s, Narrate 1.4 s, and <strong>Resolve 49.6 s</strong>.</li>
+  <li><strong>Locate:</strong> Resolve was ~80% of wall time, spread across four model round trips, with the final judgement turn alone taking 10–11 s.</li>
+  <li><strong>Impact and fix:</strong> the fix was a deliberate <em>non</em>-fix, and is discussed in §4 — the measurement is what made that a decision rather than a default.</li>
+</ul>
+
+<h4>Incident 3 — a protocol gap invisible from the output</h4>
+<ul>
+  <li><strong>Reconstruct:</strong> the first live run of the real pipeline failed on the turn that submits a tool result back to the model. An earlier spike had "proved" tool calling worked — against a single hand-rolled round trip, not the real multi-turn agent.</li>
+  <li><strong>Locate:</strong> the error trace named a required field the wire protocol had no place to carry, reproducible with raw HTTP.</li>
+  <li><strong>Impact and fix:</strong> a genuine incompatibility between a model family and a compatibility endpoint, not a bug in this codebase. It drove a provider change — and the lesson that a spike must exercise the real code path, not a simplified one.</li>
+</ul>
+
+<h3>2.2 Evaluation strategy</h3>
+
+<p><strong>Monitoring and evaluation answer different questions.</strong> Monitoring identifies that a problem exists and how widespread it is; tracing explains its cause; neither says whether an output was actually <em>good</em>. Evaluation is what supplies that evidence.</p>
+
+<h4>The dataset</h4>
+
+<p>Ten scenarios, committed to the repository, each with an <strong>expected outcome written by hand before the case was ever run</strong>. That ordering is the whole point — an expectation written after seeing the output is a transcript, not ground truth. The cases are spread deliberately across three severity bands:</p>
+
+<table>
+  <tr><th>Band</th><th>Cases</th><th>What it tests</th></tr>
+  <tr><td><strong>Resolvable</strong> (3)</td><td>A clean single line · the full worked example · a repeat customer whose history disambiguates the request</td><td>The system produces a definite, correct answer.</td></tr>
+  <tr><td><strong>Needs a flag</strong> (3)</td><td>Short stock · a line that breaches the margin floor · an unknown sender</td><td>It prices the quote <em>and</em> surfaces what a human must see.</td></tr>
+  <tr><td><strong>Must refuse</strong> (4)</td><td>An ambiguity with no evidence · a prompt-injection enquiry · an empty enquiry · a photograph with an unreadable word</td><td>It declines to decide, and says why.</td></tr>
+</table>
+
+<p>A suite made only of resolvable cases would score beautifully and prove nothing. <strong>The refusal cases are where this architecture's claim actually lives</strong>, so they are 40% of the set.</p>
+
+<p>Every factual claim inside the dataset — customer tiers, SKUs, on-hand quantities, how many variants a family carries — was queried against the running database rather than derived by hand. That surfaced a fact worth stating: <strong>no customer in the system has ever bought a spindle tape</strong>, which is <em>why</em> the worked example's spindle tape cannot be resolved from history. The refusal is a property of the data, not an artefact of prompt wording.</p>
+
+<h4>Criteria and thresholds</h4>
+
+<p>Evaluators, chosen against the dimensions the course names: <strong>coherence</strong>, <strong>fluency</strong>, <strong>relevance</strong>, <strong>groundedness</strong>, <strong>task adherence</strong>, <strong>tool-call accuracy</strong>, <strong>safety</strong>, plus <strong>response completeness</strong> — which is the one that actually consumes the hand-written ground truth. Without it, mapping ground truth would be decorative.</p>
+
+<p><strong>Acceptance thresholds were fixed before the baseline ran</strong>, and are not adjusted after seeing scores: every 1–5 metric at or above 4; pass/fail metrics at 9 of 10 or better; safety 10 of 10; and the prompt-injection case must pass task adherence.</p>
+
+<div class="todo">
+<strong>[to fill]</strong> Insert the baseline run name, the score per evaluator against its threshold, and the token usage for both the target and the judge model. A screenshot of the results view goes in §5.
+</div>
+
+<h4>One honest adaptation</h4>
+
+<p>The standard dataset flow selects a target that the platform invokes directly. Foundry does not invoke an agent running outside it, so the responses are captured from real runs through the application and supplied in the dataset instead. This is stated plainly rather than glossed: it is an adaptation, and it is the only one.</p>
+
+<h4>How evaluation fits the development lifecycle</h4>
+
+<ol>
+  <li><strong>Baseline before release</strong> — the dataset run above, on a named, traceable run.</li>
+  <li><strong>Acceptance thresholds</strong> — fixed in advance, as above.</li>
+  <li><strong>Re-evaluate after any change</strong> to a prompt, a model or retrieval.</li>
+  <li><strong>Compare runs to catch regressions</strong> — the point being that an improvement in one metric can weaken another, which only a comparison reveals.</li>
+  <li><strong>Watch for drift on a schedule</strong> — a trace-evaluation job on a lookback window, kept to manual dispatch here so it never spends tokens unattended, and presented as the job a real deployment would put on a timer.</li>
+  <li><strong>Expand risk coverage</strong> over time — prompt injection and safety are in the set from the start rather than added after an incident.</li>
+</ol>
+
+<h4>What these scores do not prove</h4>
+
+<ul>
+  <li><strong>Pricing is never judged by a model.</strong> Every rupee is proven by unit tests over the pricing domain — including the boundary cases that actually break things: exactly on a slab edge, exactly at the margin floor, exactly at the discount cap, zero quantity, unknown customer. A good <em>groundedness</em> score says nothing about whether a discount is correct.</li>
+  <li>Two perfect scores say nothing about the metrics that were not run.</li>
+  <li>External agents are a preview capability: human evaluation, trace-to-dataset conversion and red teaming are not available for them.</li>
+</ul>
+
+<figure>
+  <img src="diagrams/fig3-observability-evaluation.svg" alt="Spans flow from the three identified agents to Application Insights and into Foundry; evidence is inspected at four levels of zoom; quality is measured by a dataset run and a trace run.">
+  <figcaption><strong>Figure 3 — Observability and evaluation.</strong> Evidence at four levels of zoom, from a single execution to cross-resource trends, and two evaluation runs that answer different questions.</figcaption>
+</figure>
+
+<h3>2.3 Governance and reliability</h3>
+
+<p>Trustworthy behaviour here is engineered, not requested. Every control below is structural — something the code makes impossible — rather than an instruction a model is asked to follow.</p>
+
+<h4>Consistent outputs</h4>
+<ul>
+  <li><strong>Deterministic pricing.</strong> Every price, discount, margin check and delivery date is computed in plain C# with no model in the loop. The same enquiry yields the same numbers every time.</li>
+  <li><strong>Schema-enforced structured output with a retry.</strong> Where a stage must return structured data, the schema is generated from the C# type itself, so there is no hand-written schema to drift. An unparseable reply is retried once with the parse error fed back — before this, a single reply of prose instead of JSON killed an entire run with no recovery.</li>
+  <li><strong>Everything the model claims is re-verified in code.</strong> Its final answer is free-form text it wrote, not a value received from a tool, so every SKU and customer id it names is checked against the real repositories before anything downstream trusts it.</li>
+  <li><strong>Typed contracts between stages</strong>, so a change to what one stage passes to the next is a compile error rather than a runtime surprise.</li>
+</ul>
+
+<h4>Safe behaviour</h4>
+<ul>
+  <li><strong>A human approval gate before any write.</strong> The run pauses, checkpointed to SQL, and survives a process restart with the paused run intact.</li>
+  <li><strong>Write tools are unreachable</strong> from either agent. Read and write tools live in separate registries, and a test asserts that neither write tool's name appears in the read registry — enforced by reflection, not by the two classes merely being different.</li>
+  <li><strong>The pricing tool is withheld from both agents.</strong> The Price stage calls it directly in code, so "the model never decides money" is structurally true rather than a matter of the model choosing not to call something it could reach.</li>
+  <li><strong>Cost prices and margin figures never enter a prompt</strong> — checked by a reflection test over every type that can reach a model, which was extended when a review found a contract type outside the original test's scope.</li>
+  <li><strong>Untrusted input is always wrapped.</strong> Every prompt carrying customer-written text encloses it in a delimiter, with the enclosed text neutralised so an enquiry cannot forge a closing marker. This includes stages where the blast radius is small — there is no exemption for "probably harmless".</li>
+  <li><strong>A token budget that governs rather than reports.</strong> It counts every model round trip as it happens and stops the run when breached. It used to count only after a stage finished, which let one run reach 56,463 tokens against a 20,000 budget and report it only once it was over.</li>
+</ul>
+
+<h4>Maintainability</h4>
+<ul>
+  <li><strong>311 automated tests</strong> — the pricing domain exhaustively, every tool's validation and miss paths, every intake adapter including malformed and empty payloads, and the full pipeline end to end.</li>
+  <li><strong>Integration tests use a stubbed model client</strong>, so the whole suite passes with no network and no API key. A test that calls a real model is an evaluation, not a test.</li>
+  <li><strong>Continuous integration</strong> builds both configurations with warnings as errors, runs the suite against a real database container and builds the image — no API key, no network.</li>
+</ul>
+
+<h4>How grounding actually works here</h4>
+
+<p>Grounding operates at two levels, and they do different jobs. <strong>Tools ground the facts</strong>: the agent does not recall what a 6203 bearing is, it looks it up, and the catalogue is the authority. <strong>The knowledge source grounds the explanation</strong>: the narration names the policy rule behind a discount rather than asserting a number. Between them, every claim that reaches the salesperson traces to either a database row or a versioned document — never to model recall.</p>
+
+<h2>3 · The end-to-end workflow</h2>
+
+<figure>
+  <img src="diagrams/fig2-workflow.svg" alt="The worked example flowing through Intake, Resolve with four tool calls, deterministic pricing, a human approval gate with two green lines, one red and one amber, and the final quotation.">
+  <figcaption><strong>Figure 2 — End-to-end workflow, on the real worked example.</strong> The same enquiry from §1.1, with the tool calls, the contracts passed between stages, and the two things the system refuses to decide.</figcaption>
+</figure>
+
+<h3>3.1 The sequence</h3>
+
+<p><code>Intake → Resolve → Price → Approve → Create → Send</code>. It never reorders, never skips and never stops early. That part is a state machine in code. Inside Resolve, the agent is genuinely autonomous.</p>
+
+<p>Fully autonomous was rejected: unpredictable cost and latency, hard to evaluate, and it can silently skip a step — fatal for a document that becomes a commercial commitment. Fully deterministic was rejected because then it cannot read <em>"the thicker one"</em> or <em>"same as last time"</em>, and that ambiguity is the entire problem. <strong>The model is used only where the input is genuinely ambiguous; everything with consequences is code.</strong></p>
+
+<h3>3.2 The information passed between agents</h3>
+
+<table>
+  <tr><th>Boundary</th><th>Contract</th><th>Carries</th></tr>
+  <tr><td>Intake → Resolve</td><td><code>ExtractionResult</code></td><td>Structured lines with quantities and units, the ship-to, the required-by date, any commercial ask. An unreadable quantity is recorded as zero, never guessed.</td></tr>
+  <tr><td>Resolve → Price</td><td><code>ResolutionResult</code></td><td>Resolved lines with their SKU and the reason they resolved; unresolved lines with the reason they could not; the matched customer and tier.</td></tr>
+  <tr><td>Price → Approve</td><td><code>ApprovalRequest</code></td><td>The fully priced quote, the unresolved lines, warnings, and the narration. Margin figures are deliberately absent.</td></tr>
+  <tr><td>Approve → Create</td><td><code>ApprovalDecision</code></td><td>The human's decision, self-sufficient, so the write stage needs no further lookup.</td></tr>
+</table>
+
+<p>Defining these shapes was an architectural decision rather than a formality: they are the contract between agents, and they are what stops ambiguity propagating downstream. An unresolved line cannot accidentally be priced, because it is not in the collection the pricing stage reads.</p>
+
+<h3>3.3 Tool calls and knowledge retrieval</h3>
+
+<p>On the worked example, Resolve makes four tool calls of its own choosing — customer match, catalogue search across all three lines in one batched call, order history, stock check — and one of them is the call that makes the system feel intelligent: the 6203 series carries four sealing suffixes, so the catalogue alone returns <em>ambiguous</em>, and it is the customer's own purchase history that resolves it. The reason is recorded alongside the answer.</p>
+
+<p>Knowledge retrieval happens once, at the narration step, where the Quotation Policy explains why 8% is exactly what policy already allows: the 200-or-more quantity slab at 6% plus tier B at 2%. The customer's request is confirmed as policy rather than treated as a negotiation.</p>
+
+<h3>3.4 The final output</h3>
+
+<p>A complete draft quotation: priced lines with net unit prices, discounts and line totals; freight, GST and grand total; dispatch and delivery dates per line; a validity date; unresolved lines shown in red with the agent's reason; warnings in amber; and one plain-language paragraph a salesperson can read in five seconds. Approved, it becomes a saved quotation against the customer.</p>
+
+<h3>3.5 How it would be deployed, monitored, evaluated and improved</h3>
+
+<table>
+  <tr><th>Deployed</th><td>A container image to <strong>Azure Container Apps</strong>, with Azure SQL for data and the front end on Static Web Apps. The container, the CI pipeline that builds it and the database migration path are already built and verified; an earlier version of this system was deployed exactly this way, so this is a proven recipe rather than a proposal. Secrets come from Container Apps secrets, never the repository.</td></tr>
+  <tr><th>Monitored</th><td>Spans already flow to Application Insights connected to the Foundry project. Alerting would sit on the metrics in §2.1 — error rate by code, per-stage latency, and the two domain metrics (refusal rate and approve-versus-reject), since those are the ones that indicate the system has become subtly wrong rather than loudly broken.</td></tr>
+  <tr><th>Evaluated</th><td>The baseline dataset run gates a release; the trace-evaluation job runs on a lookback window to catch drift in production traffic.</td></tr>
+  <tr><th>Improved</th><td>Every change re-runs the dataset and is compared against the previous run. The dataset itself grows as new failure modes appear — each real incident becomes a case, which is how the prompt-injection and photograph cases entered the set.</td></tr>
+</table>
+
+<h3>3.6 The orchestration decision, stated plainly</h3>
+
+<div class="callout">
+<p><strong>Foundry's own orchestration — the visual workflow builder and its SDK — was considered and deliberately not used.</strong> This is the one place where the implementation departs from the platform's native surface, and it is a choice rather than an omission.</p>
+<p style="margin-bottom:0">This workflow has three requirements that drove it: it must <strong>pause at a human approval gate</strong> and hold that state; the paused run must <strong>survive a process restart</strong>; and the stages must pass <strong>typed contracts</strong> that the pricing engine's own unit tests can assert against. Microsoft Agent Framework Workflows provides checkpointed suspend/resume against SQL and compile-time contracts between stages. Foundry supplies model inference, tracing, agent registration and evaluation. Both halves of the lifecycle are used; the orchestration surface is the single substitution, made for stated reasons.</p>
+</div>
+
+<p>Two things follow from that choice, and both are worth being explicit about. The pipeline is strictly <strong>sequential execution</strong>, which is the orchestration pattern this system needs — there is no branching, no concurrency and no hand-off between peers. And <strong>checkpointed human approval goes beyond what the platform's workflow model prescribes</strong>: pausing indefinitely for a person, and resuming correctly after a restart, is a requirement this domain has because a quotation is a commercial commitment.</p>
+
+<h2>4 · How it was built and refined</h2>
+
+<p>The interesting history is the things that were wrong first.</p>
+
+<h4>The agent split was designed twice</h4>
+<p>The first design split Customer and Catalogue — an obvious division by subject matter. It was rejected because it broke the worked example: order history and catalogue search ended up on opposite sides, and <em>"same as last time"</em> needs both at once. Splitting by cognitive role instead (perceive versus decide) kept the capabilities that belong together, together.</p>
+
+<h4>Retrieval had to be rebuilt before anything worked</h4>
+<p>The 342-candidate flood in §2.1 was not a tuning problem, it was a wrong algorithm — substring matching where word matching was needed. The rewrite also fixed a subtler bug: scoring had been penalising extra context, so the junk word <em>"as"</em> from "same as last time" dragged a perfect match below the confidence threshold.</p>
+
+<h4>The token budget was a post-mortem before it was a governor</h4>
+<p>Counting tokens after a stage completed meant the tool loop could spend several times the budget before anything looked. Moving the count inline — every round trip, as it happens — turned a report into a control.</p>
+
+<h4>Adding a knowledge source made the output worse before it made it better</h4>
+<p>The first live run with the Quotation Policy attached cited it correctly — and grew to nine sentences, read the whole line table back, and cited the discount cap on a line that was never capped. Grounding hands a model more material it wants to use, so the prompt has to push back on <em>shape</em> as hard as on substance. The instructions were restructured to lead with the output's form, allow at most one cited rule, and carry that bad output as a worked counter-example. The next run was four sentences with one rule, cited.</p>
+
+<h4>A measurement that led to a deliberate non-change</h4>
+<p>Resolve at 49.6 s was the obvious thing to optimise. Moving the routine lookups into code — customer match by domain, catalogue search per line, run in parallel before Resolve — was designed and estimated at roughly 25 s down to 14 s. It was <strong>rejected</strong>: Resolve would then show almost no tool calls of its own, which weakens both the autonomy claim and the tool-call-accuracy evaluation, and latency is not what this system is judged on. The measurement is what turned that from a default into a decision.</p>
+
+<h2>5 · Screenshots and example interactions</h2>
+
+<div class="todo">
+<strong>[screenshots]</strong> Insert, in this order, each cropped to remove any email address, subscription id, key or connection string: (1) the Desk with the worked example pasted; (2) the live trace panel mid-run, showing the tool calls; (3) the approval card with two green lines, one red and one amber; (4) the photograph enquiry with the image shown beside the extracted lines; (5) Foundry Traces for <code>quotedesk-intake</code>; (6) Foundry Traces for <code>quotedesk-resolve</code>; (7) the evaluation results against thresholds; <strong>(8) the test suite passing</strong> — <code>dotnet test</code> showing 311 green; <strong>(9) the CI run green on GitHub Actions.</strong>
+<br><br>
+The last two matter more than they look. Nobody assessing this will run the code, so the tests and the pipeline are invisible unless a screenshot shows them — and they are the difference between a claim and evidence.
+</div>
+
+<p class="quiet">All customer, catalogue and order data in this system is synthetic and deterministically seeded. No real customer information appears in any screenshot or recording.</p>
+
+<h2>6 · Key lessons learned</h2>
+
+<ol>
+  <li><strong>A failure that looks correct is the one that matters.</strong> The single most instructive incident in this project was a model reading a handwritten "20mm" as "25mm" — a real SKU. Every code check passed and the line priced green. No validation catches that, because nothing is invalid. The answer was not a better reader; it was showing the photograph next to the extracted lines so a human compares them. Design for confident wrongness, not just for errors.</li>
+  <li><strong>A model will skip a formatting instruction, so parse defensively.</strong> The same enquiry produced a correct date on one run and the word "5th" on another. Both a stated format and a tolerant parser were needed — one optional field should never fail a whole stage.</li>
+  <li><strong>Split agents by capability, not by subject matter.</strong> The division that reads naturally on an org chart broke the actual task.</li>
+  <li><strong>Measure quality; do not assume it.</strong> Every number in this document that sounds like a claim — 49.6 s, 342 candidates, 56,463 tokens — was measured, and each one contradicted an assumption that had been held confidently.</li>
+  <li><strong>Grounding changes behaviour in ways that need re-testing.</strong> Adding a knowledge source improved correctness and degraded form simultaneously. An improvement in one dimension can regress another, which is exactly why runs are compared rather than judged alone.</li>
+  <li><strong>The hardest thing to engineer is restraint.</strong> Making a model answer is easy. Making it decline — with a reason, reliably, when the evidence is genuinely insufficient — took explicit prompting, a confidence threshold in retrieval, a code-level reconciliation step, and four of the ten evaluation cases. It is also the only reason a salesperson can trust the other six.</li>
+</ol>
+
+<h2>7 · Readiness review</h2>
+
+<table>
+  <tr><th>Check</th><th>Evidence</th></tr>
+  <tr><td><strong>Role clarity</strong></td><td>Two agents with non-overlapping responsibilities, split by cognitive role; tools assigned explicitly per agent.</td></tr>
+  <tr><td><strong>Grounding</strong></td><td>Typed tools over a real catalogue and customer history; a versioned policy document for explanations; a test asserting the document matches the pricing code.</td></tr>
+  <tr><td><strong>Execution evidence</strong></td><td>OpenTelemetry spans with stable agent identity, both agents registered, a live in-app trace panel, and stored traces that survive a page refresh.</td></tr>
+  <tr><td><strong>Evaluation results</strong></td><td>A ten-case dataset with ground truth written in advance, thresholds fixed before the baseline, across three severity bands.</td></tr>
+  <tr><td><strong>Workflow repeatability</strong></td><td>A fixed pipeline that never reorders or skips; checkpointed state that survives a restart; 311 tests and CI on every change.</td></tr>
+  <tr><td><strong>Governance</strong></td><td>A human gate before any write; write tools structurally unreachable; cost and margin withheld from every prompt; untrusted input always wrapped.</td></tr>
+</table>
+
+<p style="margin-top:26px"><strong>The central production question is not whether an agent can answer once, but whether the whole system can run reliably, be inspected, measured, improved and reused.</strong> That is the bar this submission is written against — and the part of it this project takes most seriously is that a system worth trusting has to know when not to answer at all.</p>
+
+</body>
+</html>

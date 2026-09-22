@@ -46,14 +46,23 @@ never touched from here.**
 
 ## Compliance audit — checked against every source actually read
 
-**Sources checked:** the module 5 PDF (*Evaluate agent quality*, confirmed 2026-09-13 against the
-actual document — its six evaluation dimensions, six-step configuration flow, and six-stage lifecycle
-match what this plan already had, almost line for line), the module 8 final-activity brief, and the
-official Founderz rules. **Confirmed 2026-09-13: these two documents are the complete course material
-for this track — no other modules exist or will be supplied.** The earlier caveat in this section
-("modules 1–4, 6 and 7 not checked") is retired. Anything not explicitly covered by these two
-documents — agent design, knowledge sources, orchestration, tracing mechanics — is this plan's own
-architectural judgment, stated as such, not a guess against unseen material.
+**Sources checked:** the module 5 PDF (*Evaluate agent quality*), the final-activity brief — now
+reproduced verbatim in `docs/SUBMISSION-BRIEF.md`, which is the contract and outranks this file — and
+the official Founderz rules.
+
+> **⚠️ Corrected 2026-09-18. This section previously stated: "Confirmed 2026-09-13: these two documents
+> are the complete course material for this track — no other modules exist or will be supplied."
+> That was wrong.** Five module PDFs exist (`M1-03` Introduction to Microsoft Foundry, `M1-04` Monitor
+> and trace agent behaviour, `M1-05` Evaluate agent quality, `M1-06` Orchestrate multi-agent workflows,
+> `M1-07` From prototype to production). Two of them cover ground this plan had explicitly marked as
+> unavailable: `M1-04` covers the tracing mechanics that `foundry-06` designed from first principles,
+> and `M1-06` answers the "Open input: the module 6 summary, if it can be obtained" risk recorded in
+> Step 6. `M1-07` covers the prototype-to-production reflection the brief asks for.
+>
+> The lesson is worth keeping beyond this project: a confident "confirmed, nothing else exists" in a
+> planning document is exactly the kind of claim that stops anyone looking again. Where this plan made
+> its own architectural judgement in the absence of course material, that judgement now has to be
+> checked against the modules rather than presented as filling a gap.
 
 ### Module 5 — Evaluate agent quality
 
@@ -348,15 +357,129 @@ rather than a platitude.
 
 ## Step 5 — Connect Foundry end to end
 
+### 5a-0. What module M1-04 actually says (read 2026-09-18) — use its vocabulary
+
+M1-04 (*Monitor and trace agent behaviour*) is a 7-page conceptual deck, **not** a portal walkthrough.
+It names no RBAC roles, no `gen_ai.*` attributes, no external-agent registration, and nothing about
+capturing message content. So this plan's technical design (stable agent ids, `UseOpenTelemetry`, the
+sensitive-data trade-off, Log Analytics Reader) is neither confirmed nor contradicted by the course —
+it remains our own judgement, and should still be presented as such.
+
+What it *does* give is terminology a marker trained on this deck will be listening for. Use these
+words rather than near-synonyms:
+
+- **Monitoring answers "What happened?"** (runs, errors, token usage, costs, latency, operational
+  trends). **Tracing answers "Where did it happen, and why?"** (inputs, model calls, tool calls,
+  intermediate results, retries, outputs). Combined, they answer **"How can the issue be resolved and
+  prevented?"**
+- Its stated **Core principle**, worth quoting near-verbatim: *"Monitoring identifies the presence and
+  scale of a problem; tracing reveals the execution details needed to explain its cause."*
+- Its four operational benefits: **Faster Diagnosis · Performance Optimization · Production Readiness
+  · Governance Evidence**.
+- Its four-tier **"Where to Find Observability Evidence"**: Foundry **Traces** (one execution) →
+  Foundry **Monitoring** (one agent) → Application Insights **Agents Preview** (aggregated) →
+  **Connected Foundry Resources** (cross-resource). **Organise the submission's screenshots in exactly
+  these four tiers** — it mirrors the module's own structure.
+
+**The strongest alignment in the whole course, and it is ours already.** M1-04's central claim is that
+**"Failures Can Appear Correct"** — *"an agent may produce a confident but incorrect response",* which
+is why terminal output alone cannot diagnose agent failures. That is precisely the foundry-04 finding:
+`gpt-5-mini` read a handwritten "20mm" as "25mm", a real SKU, so every code check passed and the line
+was priced green. The response was confidently wrong and structurally valid. Our answer — show the
+photograph on the approval card so a human compares it against the extracted lines — is a direct
+design response to the module's own core concept, arrived at from a real incident rather than from the
+slide. Say this explicitly in both the document and the video.
+
+**Write the three diagnosis incidents in the module's own three-move shape:** *Reconstruct the Decision
+Path → Locate the Failure Point → Connect Detail to Operational Impact.* Its worked example
+("Tracing a Missed Industrial Anomaly") follows exactly that structure, and it fits our three
+incidents — the 49.6s Resolve, the 342-candidate catalogue flood, the Gemini `thought_signature` 400 —
+without forcing.
+
+**⚠️ Unverified and load-bearing: the "Link external agent" portal flow.** M1-04 does not mention
+registering an agent that runs outside Foundry, and assumes throughout that the agent already exists
+as a first-class Foundry object. Our whole registration approach in 5b, and the `name:version` id
+convention, come from this plan, not from the course material. **Confirm that flow exists in the
+portal before relying on it**; if it does not, trace-based evaluation on registered agents (Run B)
+needs rethinking, and the dataset run (Run A) carries the evaluation requirement alone.
+
+### 5a-1. Modules M1-06 and M1-07 (read 2026-09-18) — the orchestration mismatch, and the vocabulary that fits
+
+**M1-06 (*Orchestrate multi-agent workflows*) teaches exactly two orchestration surfaces, and both are
+Foundry-native:** the **visual Workflow builder** in the portal (Build → "Agents and workflows": start
+node, agent nodes, end node, saved workflow variables, published versions, YAML export) and the
+**Microsoft Foundry SDK in Python**. The Microsoft Agent Framework and `Microsoft.Agents.AI.Workflows`
+are **never mentioned**. The module's whole "production-ready workflow" checklist — Version Control,
+Traceability, Monitoring, Evaluation, **Portable Definitions as YAML**, Flexible Hosting — assumes the
+workflow is a *published Foundry object*.
+
+QuoteDesk uses neither surface. Its workflow is a C#/.NET MAF graph inside an ASP.NET Core app, and
+Foundry is used for inference, tracing, agent registration and evaluation — orchestration was never
+one of the four. **This is the entry's biggest framing risk: a marker trained on M1-06 may open the
+portal's workflow area, find nothing, and read that as a gap.**
+
+**Decision: name the choice explicitly and justify it; do not build a Foundry visual workflow.**
+Building one now would be new scope with the queue unfinished, and the honest answer is stronger than
+the demonstration would be. The document and the video's decisions segment should say, in substance:
+
+> Foundry's own orchestration — the visual workflow builder and the Foundry SDK — was considered and
+> deliberately not used. This workflow has to pause at a human approval gate, survive a process
+> restart with the paused run intact, and pass typed C# contracts between stages that the pricing
+> engine's own unit tests can assert on. Microsoft Agent Framework Workflows gives checkpointed
+> suspend/resume against SQL and compile-time contracts; Foundry supplies inference, tracing, agent
+> registration and evaluation. Both halves of the course's lifecycle are used — the orchestration
+> surface is the one deliberate substitution, and it is made for a stated reason.
+
+**Two points that make that defensible rather than evasive:**
+
+- **"Sequential Execution" is the only orchestration pattern the course names at all.** No concurrent,
+  hand-off, group-chat, magentic or supervisor/worker vocabulary appears anywhere in this track. So
+  QuoteDesk's fixed `Intake → Resolve → Price → Approve → Create → Send` pipeline maps directly onto
+  the taught vocabulary. Do **not** invent a comparison against patterns the course never teaches.
+- **Checkpointed human approval is beyond what the course prescribes.** M1-06's production checklist
+  has no approval or restart-survivability category at all. State that plainly as going further than
+  the curriculum, rather than implying it is a taught best practice.
+
+**Quote M1-06 directly where it already describes what we built:** *"Saving outputs and defining
+schemas are architectural decisions. They establish a clear contract between agents and reduce
+ambiguity in downstream processing."* That is exactly `ExtractionResult`/`ResolutionResult` and
+`StructuredModelCall`. Also: M1-06's "Flexible Hosting" names **Azure Container Apps** explicitly —
+cite it for the deployment section instead of justifying the choice from scratch.
+
+**M1-07 (*From prototype to production*) is the document's skeleton.** Its own framing is the answer to
+the brief's "prototype → production" reflection, and QuoteDesk satisfies every principle it names:
+
+| M1-07's "Core Production Design Principle" | What QuoteDesk shows |
+|---|---|
+| **Clear Ownership** | Intake perceives, Resolve decides — responsibilities that do not overlap |
+| **Relevant Grounding** | Typed tools per agent + the Quotation Policy knowledge source (foundry-05) |
+| **Observable Execution** | The in-app trace panel, OpenTelemetry spans, three real diagnosis incidents |
+| **Measured Quality** | The 10-case dataset with ground truth, thresholds fixed before the baseline |
+| **Repeatable Orchestration** | A fixed pipeline that never reorders or skips, with a state machine in code |
+| **Operational Governance** | The human approval gate, write tools unreachable, cost/margin withheld |
+
+Two M1-07 sentences worth quoting near-verbatim: *"Trustworthy agents are engineered, not prompted
+into existence."* and *"The central production question is not whether an agent can answer once, but
+whether the complete system can run reliably, be inspected, measured, improved, and reused."*
+
+**Use M1-07's "Operational Governance" — "oversight and control" — as the vocabulary hook for the human
+approval gate**, which otherwise has no term in the course's language.
+
+**Structure the document on M1-07's six-stage lifecycle** (define the operational scenario → assign
+agent responsibilities → connect tools and knowledge → instrument agent behaviour → evaluate output
+quality → orchestrate the workflow), and close with its six-step **Solution Readiness Review** (role
+clarity, grounding, execution evidence, evaluation results, workflow repeatability, governance) as a
+self-assessment. Both map onto the brief's Steps 1–3 without strain.
+
 ### 5a. Tracing (verified APIs)
 
 - **Stable agent identity is required.** MAF sets `gen_ai.agent.id` from `AIAgent.Id`, and by default
   that is a **random id for each instance**. QuoteDesk builds fresh agents on every run, so Foundry
   could never match the traces to a registered agent. Build each agent with the
   `AsAIAgent(IChatClient, ChatClientAgentOptions, …)` overload:
-  `new ChatClientAgentOptions { Id = "quotedesk-intake:1", Name = "quotedesk-intake", ChatOptions = new() { Instructions = …, Tools = … } }`.
-  Do the same for `quotedesk-resolve:1` and `quotedesk-narrate:1`. (Foundry's trace evaluation expects
-  ids in `name:version` form.)
+  `new ChatClientAgentOptions { Id = "quotedesk-intake-v1", Name = "quotedesk-intake", ChatOptions = new() { Instructions = …, Tools = … } }`.
+  Do the same for `quotedesk-resolve-v1` and `quotedesk-narrate-v1`. (The `name-vN` form follows
+  Microsoft's documented example for `otel_agent_id`; see 5b for the 2026-09-22 correction.)
 - Wrap each one: `.AsBuilder().UseOpenTelemetry("QuoteDesk.Agents", a => a.EnableSensitiveData = llm.TraceSensitiveData).Build()`.
   `OpenTelemetryAgent` also turns on inner chat-client telemetry, so **don't** add `UseOpenTelemetry`
   to `ChatClientRegistry` as well — that would duplicate every span.
@@ -383,11 +506,43 @@ rather than a platitude.
 
   Each one led to a real fix that's already in the code.
 
-### 5b. Register the two agents (portal, one-off)
+### 5b. Register the two agents (portal, one-off) — verified against Microsoft's docs 2026-09-22
 
-Foundry → **Build → Agents → New agent → Link external agent**, twice:
-`quotedesk-intake` with OTel id `quotedesk-intake:1`, and `quotedesk-resolve` with `quotedesk-resolve:1`.
-Run one enquiry, wait 2–5 minutes, then open each agent's **Traces** tab. **Take the screenshot now.**
+Read the official page before touching this: **"Register external agents for observability and
+evaluation"** (learn.microsoft.com/azure/foundry/agents/how-to/register-external-agent). It confirms
+the approach and corrects three things this plan had wrong.
+
+**Confirmed.** External agents are real and are exactly our case: *"Foundry stores only registration
+metadata for these agents. It doesn't host, proxy, or invoke the runtime."* The portal flow exists —
+**Build → Agents → New agent → Link external agent**, entering a name, a description and the
+OpenTelemetry ID. Matching is on `gen_ai.agent.id == otel_agent_id`, which is precisely what
+`AgentInstrumentation` emits. **Trace-based evaluation is supported**: *"External agents support
+trace-based evaluation of individual interactions."*
+
+**Corrected — the roles.** This plan previously called for *Log Analytics Reader* on the App Insights
+resource **and** its workspace, granted to the project's managed identity. That is not what the docs
+require. They require, on **Harsh's own identity**: **Foundry User** on the project, and **Reader** or
+**Monitoring Reader** on the connected Application Insights resource. Simpler, and the managed-identity
+assignment was never needed. (Note the docs also record a rename: *Foundry User* was previously
+*Azure AI User*, so either name may appear in the portal.)
+
+**Corrected — the id format.** This plan invented `name:version` with a colon. The documented example
+is `travel-planner-agent-v1` — a hyphen — and the docs constrain agent names to *"alphanumeric
+characters, hyphens, and underscores"*. The ids were changed to **`quotedesk-intake-v1`**,
+**`quotedesk-resolve-v1`** and **`quotedesk-narrate-v1`** on 2026-09-22, before any trace was emitted.
+A colon risked the one failure that gives no error at all: a registration matching no spans.
+
+**Corrected — what external agents cannot do.** Three features are unsupported, and only the second
+touches this plan: human evaluation, **converting agent traces into an evaluation dataset**, and AI
+red teaming. That limitation is why `quotedesk-eval-v1.jsonl` is hand-written with ground truth
+decided in advance — which was already the right call for a different reason (ground truth cannot come
+from a transcript), and is now also the only available one.
+
+**Also useful:** the App Insights connection string is at **Manage → Project details → Connected
+resources**, and ingestion takes *"typically 2–5 minutes"*. The docs' own troubleshooting list for an
+empty Traces tab is: App Insights connected to the right project · `otel_agent_id` matching
+`gen_ai.agent.id` · the connection string pointing at the right resource · spans following the GenAI
+semantic conventions.
 
 ### 5c. Evaluation — module 5's six steps and six lifecycle stages, followed in order
 
@@ -414,7 +569,7 @@ Run one enquiry, wait 2–5 minutes, then open each agent's **Traces** tab. **Ta
    production traces, with no dataset to build.
    - In the portal: open `quotedesk-intake` / `quotedesk-resolve` → Evaluation → traces.
    - As code, repeatably, in `tools/QuoteDesk.FoundryOps`:
-     `evaluate --agent quotedesk-resolve:1 --run-name traces-baseline-v1`, using the `azure_ai_traces`
+     `evaluate --agent quotedesk-resolve-v1 --run-name traces-baseline-v1`, using the `azure_ai_traces`
      data source with an agent filter.
 4. **Evaluators** (names checked against Foundry's built-in list), mapped to module 5's six dimensions:
    `coherence`, `fluency`, `task_adherence` (pass/fail), `tool_call_accuracy` (1–5, "tool usage"),
@@ -502,9 +657,9 @@ Run one enquiry, wait 2–5 minutes, then open each agent's **Traces** tab. **Ta
      assume it; the thing that makes the architecture interesting is knowing when *not* to decide.
   - Include the updated blueprint diagrams (Fig. 03 → dataset + trace evaluation) and the repo URL
     **if the anonymity check allows it**.
-- **Open input:** the module 6 summary (orchestration), if it can be obtained. If the course teaches
-  Foundry's own workflow orchestration, the document names it and explains why MAF Workflows were
-  chosen: checkpointed human approval, and state that survives a restart.
+- ~~**Open input:** the module 6 summary (orchestration)~~ — **obtained and read 2026-09-18. It does
+  teach Foundry's own workflow orchestration, and this is the entry's single biggest framing risk.**
+  See the section below; the document must name the choice, not let a marker discover it.
 
 ---
 

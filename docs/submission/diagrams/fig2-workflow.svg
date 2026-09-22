@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 720" width="980" height="720" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="End-to-end workflow for the worked example: an enquiry with three lines passes through Intake, Resolve, Price, a human approval gate, and quote creation, with the tool calls and contracts shown at each step.">
+  <title>Figure 2 — End-to-end workflow, on the real worked example</title>
+
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="a2t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="980" height="720" fill="#ffffff"/>
+
+  <!-- ===== The enquiry ===== -->
+  <g>
+    <rect x="24" y="20" width="300" height="146" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="40" y="42" font-size="11" font-weight="700" fill="#475569">THE ENQUIRY — 08:41, pasted or photographed</text>
+    <text x="40" y="64" font-size="11" fill="#334155" font-style="italic">"Need urgent quote —</text>
+    <text x="40" y="80" font-size="11" fill="#334155" font-style="italic">250 nos of the 6203 bearings (same as last time)</text>
+    <text x="40" y="96" font-size="11" fill="#334155" font-style="italic">40 mtr of the 25mm PU timing belt</text>
+    <text x="40" y="112" font-size="11" fill="#334155" font-style="italic">12 pcs ring frame spindle tape, the thicker one</text>
+    <text x="40" y="132" font-size="11" fill="#334155" font-style="italic">…need by 5th. Last time you gave 8%, keep same."</text>
+    <text x="40" y="154" font-size="10.5" fill="#64748b">Wrapped in a delimiter — data, never instructions.</text>
+  </g>
+
+  <!-- ===== Stage 1 Intake ===== -->
+  <g>
+    <rect x="360" y="20" width="596" height="98" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+    <text x="378" y="44" font-size="13.5" font-weight="700" fill="#4c1d95">1 · INTAKE — perceives</text>
+    <text x="378" y="66" font-size="11.5" fill="#5b21b6">Reads the text, or the photograph, into structured lines. Calls <tspan font-family="Consolas, monospace" font-size="11">verify_catalogue_term</tspan> only when</text>
+    <text x="378" y="83" font-size="11.5" fill="#5b21b6">a word is genuinely unclear. A quantity it cannot read is written as 0 — never guessed.</text>
+    <text x="378" y="105" font-size="10.5" fill="#6d28d9" font-family="Consolas, monospace">→ ExtractionResult { 3 lines, shipTo "Sachin", requiredBy 5th, commercial ask 8% }</text>
+  </g>
+  <line x1="328" y1="70" x2="356" y2="70" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- ===== Stage 2 Resolve ===== -->
+  <g>
+    <rect x="360" y="132" width="596" height="212" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+    <text x="378" y="156" font-size="13.5" font-weight="700" fill="#4c1d95">2 · RESOLVE — decides (the one autonomous node)</text>
+
+    <rect x="378" y="170" width="560" height="26" rx="4" fill="#ffffff" stroke="#c4b5fd"/>
+    <text x="390" y="187" font-size="10.5" fill="#4c1d95"><tspan font-family="Consolas, monospace">resolve_customer</tspan> → Shreeji Textiles, tier B, matched on the sender's email domain</text>
+
+    <rect x="378" y="202" width="560" height="26" rx="4" fill="#ffffff" stroke="#c4b5fd"/>
+    <text x="390" y="219" font-size="10.5" fill="#4c1d95"><tspan font-family="Consolas, monospace">search_catalog</tspan> → 6203 is <tspan font-weight="700">ambiguous</tspan> across four sealing suffixes; the 25mm PU belt resolves cleanly</text>
+
+    <rect x="378" y="234" width="560" height="26" rx="4" fill="#ffffff" stroke="#c4b5fd"/>
+    <text x="390" y="251" font-size="10.5" fill="#4c1d95"><tspan font-family="Consolas, monospace">get_customer_history</tspan> → three prior purchases of the 2RS ⇒ "same as last time" is answered</text>
+
+    <rect x="378" y="266" width="560" height="26" rx="4" fill="#ffffff" stroke="#c4b5fd"/>
+    <text x="390" y="283" font-size="10.5" fill="#4c1d95"><tspan font-family="Consolas, monospace">check_stock</tspan> → belt: 12 m on hand against 40 requested, 9-day lead time</text>
+
+    <text x="378" y="312" font-size="11.5" font-weight="600" fill="#4c1d95">The spindle tape has eight widths in the catalogue and no purchase history anywhere.</text>
+    <text x="378" y="329" font-size="11.5" font-weight="700" fill="#b91c1c">It is left UNRESOLVED. The agent does not guess.</text>
+  </g>
+  <line x1="658" y1="120" x2="658" y2="128" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- ===== Stage 3 Price ===== -->
+  <g>
+    <rect x="360" y="358" width="596" height="122" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+    <text x="378" y="382" font-size="13.5" font-weight="700" fill="#065f46">3 · PRICE — deterministic C#, no model in the loop</text>
+    <text x="378" y="404" font-size="11.5" fill="#047857">250 units crosses the 200-or-more slab (6%); tier B adds 2%; total 8% — <tspan font-weight="600">exactly what the customer asked for</tspan>,</text>
+    <text x="378" y="421" font-size="11.5" fill="#047857">so the system confirms it as policy rather than treating it as a negotiation. Margin 14%, above the 10% floor.</text>
+    <text x="378" y="438" font-size="11.5" fill="#047857">Belt dispatch the 4th, delivery the 6th — <tspan font-weight="600">misses the requested 5th, and says so.</tspan></text>
+    <text x="378" y="464" font-size="10.5" fill="#059669">One model call here, and only to write the sentence: it is handed the slab %, the tier % and the tier, and cites them.</text>
+  </g>
+  <line x1="658" y1="346" x2="658" y2="354" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- ===== Stage 4 Approve ===== -->
+  <g>
+    <rect x="360" y="494" width="596" height="132" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+    <text x="378" y="518" font-size="13.5" font-weight="700" fill="#9a3412">4 · APPROVE — a human, and the run pauses here</text>
+
+    <circle cx="390" cy="540" r="5" fill="#16a34a"/>
+    <text x="404" y="544" font-size="11.5" fill="#7c2d12">Two green lines — priced, in stock, within policy</text>
+
+    <circle cx="390" cy="562" r="5" fill="#dc2626"/>
+    <text x="404" y="566" font-size="11.5" fill="#7c2d12">One red line — which spindle tape? The salesperson decides, not the model</text>
+
+    <circle cx="390" cy="584" r="5" fill="#d97706"/>
+    <text x="404" y="588" font-size="11.5" fill="#7c2d12">One amber flag — the delivery date misses the 5th</text>
+
+    <text x="378" y="612" font-size="10.5" fill="#c2410c">The paused run is checkpointed to SQL: it survives a process restart. Write tools are unreachable until this gate clears.</text>
+  </g>
+  <line x1="658" y1="482" x2="658" y2="490" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- ===== Output ===== -->
+  <g>
+    <rect x="24" y="600" width="300" height="96" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="40" y="622" font-size="11" font-weight="700" fill="#14532d">THE OUTPUT — 08:47</text>
+    <text x="40" y="644" font-size="11.5" fill="#166534">Quotation QTN-2026-0841, saved against</text>
+    <text x="40" y="661" font-size="11.5" fill="#166534">the customer and sent on the same thread.</text>
+    <text x="40" y="684" font-size="11" font-weight="600" fill="#15803d">Six minutes, two human judgements.</text>
+  </g>
+  <path d="M 656 628 L 656 660 L 330 660" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#a2)"/>
+
+  <!-- ===== Side note: what used to happen ===== -->
+  <g>
+    <rect x="24" y="186" width="300" height="106" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+    <text x="40" y="208" font-size="11" font-weight="700" fill="#991b1b">WITHOUT THE SYSTEM</text>
+    <text x="40" y="230" font-size="11.5" fill="#7f1d1d">Twenty minutes of looking things up,</text>
+    <text x="40" y="247" font-size="11.5" fill="#7f1d1d">usually that evening or the next morning.</text>
+    <text x="40" y="270" font-size="11.5" fill="#7f1d1d">Half the time the customer has already</text>
+    <text x="40" y="287" font-size="11.5" fill="#7f1d1d">phoned to chase it.</text>
+  </g>
+
+  <!-- ===== Side note: refusals ===== -->
+  <g>
+    <rect x="24" y="312" width="300" height="164" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="40" y="334" font-size="11" font-weight="700" fill="#475569">THE TWO REFUSALS</text>
+    <text x="40" y="356" font-size="11" fill="#334155">This enquiry contains two things the system</text>
+    <text x="40" y="372" font-size="11" fill="#334155">could plausibly have guessed at, and doesn't:</text>
+    <text x="40" y="396" font-size="11" fill="#334155">• <tspan font-weight="600">"the thicker one"</tspan> — eight candidates,</text>
+    <text x="52" y="412" font-size="11" fill="#334155">no history. Escalated, not resolved.</text>
+    <text x="40" y="436" font-size="11" fill="#334155">• <tspan font-weight="600">the date</tspan> — computed from real stock and</text>
+    <text x="52" y="452" font-size="11" fill="#334155">lead time, not from what the customer</text>
+    <text x="52" y="468" font-size="11" fill="#334155">hoped for.</text>
+  </g>
+</svg>

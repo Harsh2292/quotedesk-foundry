@@ -1419,3 +1419,76 @@ distinct entry and fail. Also de-duplicated the `Now` constant, which the extrac
 in two places. The review separately confirmed by decompiling 1.19.0 that `ResolveExecutor`'s move to
 the `ChatClientAgentOptions` overload loses nothing — the old constructor built the same options
 object internally — and that nothing is double-instrumented.
+
+### 2026-09-18 (cont. 2) — foundry-07 started: the evaluation dataset
+
+**Done:** `tests/QuoteDesk.Evals/dataset/quotedesk-eval-v1.jsonl` — 10 cases across three severity
+bands (3 resolvable, 3 needs-a-flag, 4 must-refuse), each with `ground_truth` **written before any of
+them was run**, which is the only thing that makes it ground truth. `response` is deliberately empty
+on every row: Foundry cannot invoke an external agent, so each case is run through the real Desk and
+its actual output pasted in. A README beside the file states the one rule — never edit a ground truth
+to match what the system did — and what the scores do not prove.
+
+**Files that matter:** `tests/QuoteDesk.Evals/dataset/quotedesk-eval-v1.jsonl` and its `README.md`.
+
+**Every factual claim was queried against the running seeded database**, not derived from the seeder
+by hand (its tier off-by-one is a known trap). Two findings worth keeping: **no customer has ever
+bought a spindle tape** — so the worked example's spindle tape is unresolvable as a property of the
+data, not an accident of the prompt — and the catalogue carries **eight** Doubling Frame Spindle Tape
+widths (4mm–11mm), not two as docs/DOMAIN.md's narrative implies.
+
+**Known gaps:** `response` empty on all 10 rows until the live runs happen; the photo case needs the
+crafted demo photograph, which does not exist yet (foundry-08 records it). Thresholds are fixed in the
+task file and must not be adjusted after seeing scores.
+
+**Blocked on Harsh:** unchanged — commit; the foundry-06 portal half; then the 10 live Desk runs (they
+cost real model calls, so run each once, with its own `sender` — a blank sender silently turns any
+case into the unknown-sender case).
+
+**Next:** foundry-07 steps 2–3 (Run A upload + field mapping, Run B trace evaluation), both of which
+need the portal.
+
+## 2026-09-22 — Foundry portal half done; submission document and diagrams written
+
+**Done:**
+- **Foundry is fully wired and verified.** Both agents registered in the portal as *external* agents
+  (Build → Agents → New agent → **Link external agent** — not "Build" or "Code an agent", which create
+  Foundry-hosted agents). App Insights connected: `pharshin29-2918-appinsights-7372`, workspace
+  `quotedesk-logs`, auth **API Key**. The project managed identity's IAM access to App Insights was
+  granted by Harsh via the portal's Resolve prompt — it is needed for **Insights** and trace
+  **Evaluation**, even with API-key auth, which only covers Traces.
+- **Verified end to end against a real trace** (`c09a15db0ed5370cea516858222511c6`, queried from Log
+  Analytics): 56 spans, all three agent ids present (`quotedesk-intake-v1`, `-resolve-v1`,
+  `-narrate-v1`), message content captured, and Resolve's 5 tool calls + results present in its output
+  messages — so `tool_call_accuracy` will have data. Span token totals matched `AgentRuns` exactly.
+- **Measured live run** (enquiry 5002 → QTN-2026-1002): **38.7 s** to a ready-to-approve draft
+  (Intake 6.0 s nano · Resolve 28.6 s mini · Price+Narrate ~4.1 s), approve 0.9 s, 21,726 in / 2,903
+  out tokens. Resolve's 5 tool calls took **0.34 s total**; its final judgement turn alone took
+  **12.8 s**. Grand total **₹69,237.68 — identical to the 18 Sep run** with different model calls in
+  between: deterministic pricing demonstrated, not claimed.
+- **Submission document + three diagrams written:** `docs/submission/QuoteDesk-submission.html`
+  (open in Chrome → Ctrl+P → Save as PDF) and `docs/submission/diagrams/fig1..3.svg`. Structured on the
+  brief's own numbering. Placeholders remain for anonymity, evaluation numbers and 9 screenshots.
+- `docs/SUBMISSION-BRIEF.md` (verbatim brief) and `docs/COURSE-MODULES.md` (M1-04/06/07 summarised).
+
+**Decisions made:**
+- **Agent ids changed from `name:1` to `name-v1`** — Microsoft's documented `otel_agent_id` example is
+  `travel-planner-agent-v1` and names allow only alphanumerics/hyphens/underscores. The colon form was
+  this project's invention and risked a registration silently matching no spans.
+- **Evaluation plan survives**: external agents support trace-based evaluation; what they can't do is
+  convert traces into a dataset (plus human eval and red teaming). The hand-written dataset is the answer.
+- Judges only watch the video and read the PDF — **nothing is run**. Invisible work (tests, CI) must be
+  screenshotted; screenshots 8 (311 tests green) and 9 (CI green) were added to the document's list.
+- Run B, v1-vs-v2 comparison, drift workflow, FoundryOps console: **cut for time**, and to be stated as
+  such in the document rather than implied.
+
+**Known gaps:** user-secret `AzureMonitor:ConnectionString` had a stray `<`…`>` from a placeholder in
+Claude's own instructions — fixed. Both dev servers were killed by low system memory at the end of
+the session. `verify_catalogue_term` has still never fired on a live photo.
+
+**Blocked on Harsh:** commit the staged work; the Monitor / Insights / Evaluation tabs; the 10 dataset
+runs (each with its own `sender`) to fill `response`; Run A; all screenshots; the anonymity check on
+the Founderz upload form; the video on the 24th.
+
+**Next:** restart API (`dotnet run --project src/QuoteDesk.Api --launch-profile http`) and web
+(`npm run dev`), do the 10 dataset runs, then configure Evaluation/Insights against that data.

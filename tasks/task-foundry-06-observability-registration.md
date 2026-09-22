@@ -19,8 +19,8 @@ MAF sets `gen_ai.agent.id` from `AIAgent.Id`, and by default that's a **random i
 instance**. QuoteDesk builds a fresh agent on every pipeline run, so without an explicit id, Foundry
 could never attribute two runs' traces to "the same agent." Build each agent with the
 `AsAIAgent(IChatClient, ChatClientAgentOptions, ...)` overload and an explicit, stable id:
-`new ChatClientAgentOptions { Id = "quotedesk-intake:1", Name = "quotedesk-intake", ChatOptions = new()
-{ Instructions = ..., Tools = ... } }` — likewise `quotedesk-resolve:1` and `quotedesk-narrate:1`.
+`new ChatClientAgentOptions { Id = "quotedesk-intake-v1", Name = "quotedesk-intake", ChatOptions = new()
+{ Instructions = ..., Tools = ... } }` — likewise `quotedesk-resolve-v1` and `quotedesk-narrate-v1`.
 Foundry's own convention for these ids is `name:version`.
 
 ### Tracing
@@ -69,7 +69,7 @@ rename in foundry-03 stranded 5 local pending approvals this way.
 ### Register both agents (portal, one-off, not code)
 
 Foundry → **Build → Agents → New agent → Link external agent**, twice: `quotedesk-intake` with OTel
-id `quotedesk-intake:1`, and `quotedesk-resolve` with `quotedesk-resolve:1`. Run one enquiry, wait
+id `quotedesk-intake-v1`, and `quotedesk-resolve` with `quotedesk-resolve-v1`. Run one enquiry, wait
 2–5 minutes, open each agent's **Traces** tab, confirm spans appear, **screenshot both now**.
 
 ## Acceptance criteria
@@ -101,7 +101,7 @@ NuGet resolved, clean under `-warnaserror` (no `NU1903` advisory, which is what 
 
 **Stable agent identity.** `AgentIdentity` and `AgentInstrumentation` (new,
 `src/QuoteDesk.Agents/Pipeline/AgentInstrumentation.cs`) hold the three ids —
-`quotedesk-intake:1`, `quotedesk-resolve:1`, `quotedesk-narrate:1` — and the single
+`quotedesk-intake-v1`, `quotedesk-resolve-v1`, `quotedesk-narrate-v1` — and the single
 `.AsBuilder().UseOpenTelemetry(...)` wrapping. `ResolveExecutor` had to move from
 `AsAIAgent(instructions:, name:, …)` to the `ChatClientAgentOptions` overload, because only that one
 can set `Id`. Narrate is given an id too, though it is not registered in the portal: it makes no
@@ -149,25 +149,52 @@ predate this change. The reasoning above says they will still approve; the cheap
 clicking Approve on one in the UI. Not done here, because it writes a real quote row to Harsh's dev
 database and the check is his to spend.
 
-## What is left, and it needs Harsh
+## What is left, and it needs Harsh — verified against Microsoft's docs, 2026-09-22
 
-None of this can be done from a terminal — it is portal clicks and a credential.
+None of this can be done from a terminal. Source: "Register external agents for observability and
+evaluation" on Microsoft Learn. Do the steps in this order; step 5 is the checkpoint that tells you
+whether the hard part worked.
 
-1. **Connect Application Insights** — Foundry project → Agents → Traces → Connect.
-2. **Grant roles** — Foundry User for Harsh; **Log Analytics Reader** for the project's managed
-   identity on the App Insights resource *and* its workspace. Trace-based evaluation (foundry-07)
-   fails without this second one.
-3. **Set the connection string locally:**
-   `dotnet user-secrets set "AzureMonitor:ConnectionString" "<the App Insights connection string>" --project src/QuoteDesk.Api`
-4. **Turn on sensitive data locally:**
-   `dotnet user-secrets set "Llm:TraceSensitiveData" "true" --project src/QuoteDesk.Api`
-   Without it, spans carry no `gen_ai.input.messages`/`output.messages` and every Foundry quality
-   evaluator scores `None`. This is the documented trade-off, not an oversight.
-5. **Run one enquiry** through the Desk, wait 2–5 minutes for ingestion.
-6. **Register both agents** — Foundry → Build → Agents → New agent → **Link external agent**, twice:
-   `quotedesk-intake` with OTel id `quotedesk-intake:1`, and `quotedesk-resolve` with
-   `quotedesk-resolve:1`.
-7. **Open each agent's Traces tab, confirm spans, and screenshot both now** — not on video day.
+1. **Connect Application Insights.** Foundry portal -> your project -> Agents -> Traces -> Connect.
+   Create one in `quotedesk-rg`, West US 3, if none exists. Traces are not stored retroactively, so a
+   run before this step is lost.
+2. **Give your own account the two roles** (this replaces the managed-identity/Log Analytics Reader
+   steps this file previously carried, which the docs do not ask for):
+   - **Foundry User** on the Foundry project. Recently renamed from *Azure AI User*, so either label
+     may appear.
+   - **Reader** or **Monitoring Reader** on the Application Insights resource, granted in Azure
+     portal -> that resource -> Access control (IAM).
+3. **Copy the connection string.** Foundry portal -> Manage -> Project details -> Connected resources
+   -> the App Insights resource. (Or its Overview page in the Azure portal.)
+4. **Set two user-secrets and restart the API** — they are read at startup only:
+   ```
+   dotnet user-secrets set "AzureMonitor:ConnectionString" "<paste>" --project src/QuoteDesk.Api
+   dotnet user-secrets set "Llm:TraceSensitiveData" "true" --project src/QuoteDesk.Api
+   ```
+   The second is required: without message content, every Foundry quality evaluator scores `None`.
+   Photographs are excluded from traces automatically.
+5. **Run one enquiry, wait 2-5 minutes, then check Foundry -> Traces.** The docs give that ingestion
+   window explicitly. **This is the checkpoint** — if the run does not appear, registering agents
+   will not help. The documented causes are: App Insights not connected to this project, the id not
+   matching, the connection string pointing elsewhere, or spans not following the GenAI conventions.
+6. **Register both agents.** Build -> Agents -> New agent -> **Link external agent**, twice, entering
+   a name, a description and the OpenTelemetry ID. The IDs must match character for character:
+
+   | Name | OpenTelemetry ID |
+   |---|---|
+   | `quotedesk-intake` | `quotedesk-intake-v1` |
+   | `quotedesk-resolve` | `quotedesk-resolve-v1` |
+
+   These changed from a colon form on 2026-09-22 to match the documented `name-vN` convention — the
+   code emits exactly these strings, pinned by a test.
+7. **Open each agent's Traces tab, confirm spans, screenshot both now.** Crop out the signed-in email,
+   the subscription id and anything key-shaped before saving — the brief makes confidentiality a
+   marking criterion, not just good manners.
+
+**What external agents cannot do** (from the docs' own limitations list): human evaluation,
+**converting agent traces into an evaluation dataset**, and AI red teaming. Only the middle one
+matters here, and the hand-written `quotedesk-eval-v1.jsonl` already answers it. **Trace-based
+evaluation is supported** and is what the registration buys.
 
 **A correction worth carrying into the submission document:** Foundry **guardrails / content-filter
 policies do not apply here**, because the models are called through instant access (preview), which

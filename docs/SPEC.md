@@ -568,8 +568,8 @@ Agent Service runtime, which this app does not run (docs/FOUNDRY-PLAN.md §4d).
   corrected. A model must never "fix" a number toward what the document suggests.
 
 **Resolved in task foundry-06 — agent identity and tracing.** Each of the three agents is built with
-an explicit, stable `ChatClientAgentOptions.Id` (`quotedesk-intake:1`, `quotedesk-resolve:1`,
-`quotedesk-narrate:1`, Foundry's `name:version` convention) and wrapped once with
+an explicit, stable `ChatClientAgentOptions.Id` (`quotedesk-intake-v1`, `quotedesk-resolve-v1`,
+`quotedesk-narrate-v1`, Foundry's `name:version` convention) and wrapped once with
 `.AsBuilder().UseOpenTelemetry("QuoteDesk.Agents", …)`. Both live in
 `QuoteDesk.Agents.Pipeline.AgentInstrumentation`/`AgentIdentity`.
 
