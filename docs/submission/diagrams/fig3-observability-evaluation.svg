@@ -105,12 +105,12 @@
   </g>
 
   <!-- ===== Evaluation ===== -->
-  <text x="24" y="412" font-size="13" font-weight="700" fill="#0f172a">Measured quality — two runs, because each answers something the other cannot</text>
+  <text x="24" y="412" font-size="13" font-weight="700" fill="#0f172a">Measured quality — a dataset with ground truth, and a judge reading real traces</text>
 
   <g>
     <rect x="24" y="426" width="458" height="192" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
     <text x="44" y="450" font-size="12" font-weight="700" fill="#14532d">RUN A — dataset evaluation</text>
-    <text x="44" y="472" font-size="10.5" fill="#166534">10 cases, each with ground truth written <tspan font-weight="700">before</tspan> the case was run.</text>
+    <text x="44" y="472" font-size="10.5" fill="#166534">10 cases, ground truth written <tspan font-weight="700">before</tspan> any run · 8 scored in Foundry.</text>
 
     <rect x="44" y="484" width="132" height="26" rx="4" fill="#ffffff" stroke="#86efac"/>
     <text x="110" y="501" font-size="10" fill="#14532d" text-anchor="middle">3 · resolvable</text>
@@ -123,16 +123,16 @@
 
     <text x="44" y="534" font-size="10.5" fill="#166534">A suite of only resolvable cases scores beautifully and proves nothing.</text>
     <text x="44" y="551" font-size="10.5" fill="#166534">The refusal cases are where the architecture's claim actually lives.</text>
-    <text x="44" y="575" font-size="10" fill="#15803d">Evaluators: coherence · fluency · relevance · groundedness ·</text>
-    <text x="44" y="589" font-size="10" fill="#15803d">task_adherence · tool_call_accuracy · safety · response_completeness</text>
-    <text x="44" y="606" font-size="10" fill="#15803d">Thresholds fixed before the baseline ran, never adjusted after seeing scores.</text>
+    <text x="44" y="575" font-size="10" fill="#15803d">Evaluators: task completion · response completeness · relevance ·</text>
+    <text x="44" y="589" font-size="10" fill="#15803d">intent resolution · coherence · fluency · violence · indirect attack</text>
+    <text x="44" y="606" font-size="10" fill="#15803d">Baseline v1 → fixes → v2, same judge. Thresholds never moved.</text>
   </g>
 
   <g>
     <rect x="496" y="426" width="460" height="192" rx="8" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
-    <text x="516" y="450" font-size="12" font-weight="700" fill="#713f12">RUN B — trace evaluation</text>
-    <text x="516" y="472" font-size="10.5" fill="#854d0e">Graded against real production traces from the registered agents.</text>
-    <text x="516" y="489" font-size="10.5" fill="#854d0e">No dataset to build — this is what registration buys.</text>
+    <text x="516" y="450" font-size="12" font-weight="700" fill="#713f12">INSIGHTS — a judge model reads real traces</text>
+    <text x="516" y="472" font-size="10.5" fill="#854d0e">Scans the registered agents' own traces and raises findings —</text>
+    <text x="516" y="489" font-size="10.5" fill="#854d0e">here, one High defect, fixed the same day. Trace-based scoring is next.</text>
 
     <text x="516" y="516" font-size="11" font-weight="700" fill="#713f12">What the scores do not prove</text>
     <text x="516" y="536" font-size="10.5" fill="#854d0e">• <tspan font-weight="600">Pricing is never judged by a model.</tspan> Every rupee is proven</text>

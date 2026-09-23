@@ -22,7 +22,12 @@ public sealed class CatalogRepository(QuoteDeskDbContext db) : ICatalogRepositor
         // (foundry-03 security review).
         var pattern = $"%{EscapeLike(query)}%";
         var items = await db.CatalogItems.AsNoTracking()
-            .Where(c => EF.Functions.Like(c.Sku, pattern, LikeEscape) || EF.Functions.Like(c.Name, pattern, LikeEscape))
+            .Where(c => EF.Functions.Like(c.Sku, pattern, LikeEscape)
+                || EF.Functions.Like(c.Name, pattern, LikeEscape)
+                // The family word too: items are named "Ring Frame Spindle Tape" while the family is
+                // "SpindleTapes", so a search for the family alone recalled nothing and a real enquiry
+                // came back "not a product this distributor stocks" (live run 6021, 2026-09-23).
+                || EF.Functions.Like(c.Category, pattern, LikeEscape))
             .OrderBy(c => c.Sku)
             .ToListAsync(cancellationToken);
 

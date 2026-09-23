@@ -36,18 +36,12 @@ export function AppShell({ active, children }: { active: Route['name']; children
     <div className="flex min-h-screen flex-col bg-slate-50">
       <header className="flex h-12 shrink-0 items-center gap-6 border-b border-slate-200 bg-white px-5">
         <div className="flex items-center gap-2.5 text-[13.5px] font-semibold text-slate-900">
-          <span className="flex size-5 items-center justify-center rounded-[5px] bg-slate-900">
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#fff"
-              strokeWidth="2.6"
-              aria-hidden="true"
-            >
-              <path d="M5 12l5 5L20 7" />
-            </svg>
+          {/* The same "Q" mark as the sign-in screen, at header size. */}
+          <span
+            className="flex size-5 items-center justify-center rounded-[5px] bg-slate-900 text-[11px] font-semibold text-white"
+            aria-hidden="true"
+          >
+            Q
           </span>
           QuoteDesk
         </div>

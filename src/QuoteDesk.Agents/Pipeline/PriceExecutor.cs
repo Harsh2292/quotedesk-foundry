@@ -52,12 +52,21 @@ public sealed class PriceExecutor(string id, PricingTools pricingTools, AIAgent 
         };
     }
 
+    /// <summary>What Narrate is told the customer is called. A null name is spelled out rather than
+    /// left empty: on an unknown sender, the empty field let Narrate fill the gap with the company
+    /// from its own prompt's worked example, heading the approval card "Shreeji Textiles" for a
+    /// sender that matched nobody (live run 6012, 2026-09-23).</summary>
+    public static string NarrationCustomerName(string? resolvedName) =>
+        string.IsNullOrWhiteSpace(resolvedName)
+            ? "UNKNOWN — this sender matched no customer record; call them an unknown sender, never a company name"
+            : resolvedName;
+
     private async Task<string> NarrateAsync(ResolutionResult resolution, PricedQuote priced, CancellationToken cancellationToken)
     {
         var summary = JsonSerializer.Serialize(new
         {
             priced.CustomerId,
-            resolution.CustomerName,
+            CustomerName = NarrationCustomerName(resolution.CustomerName),
             // The tier is handed over rather than left to be inferred from TierDiscountPct, so the
             // narration can name it against Prompts/quotation-policy.md without reasoning backwards
             // from a percentage (task foundry-05).

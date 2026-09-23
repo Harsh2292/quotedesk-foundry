@@ -133,24 +133,26 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
             actions={
               <div className="flex gap-2">
                 {failed && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={session.retry}
-                      className="text-[11.5px] font-medium text-slate-600 hover:text-slate-900"
-                    >
-                      Retry
-                    </button>
-                    {canEditAndRerun && (
-                      <button
-                        type="button"
-                        onClick={() => session.editForRerun(session.draftBody)}
-                        className="text-[11.5px] font-medium text-slate-600 hover:text-slate-900"
-                      >
-                        Edit &amp; re-run
-                      </button>
-                    )}
-                  </>
+                  <button
+                    type="button"
+                    onClick={session.retry}
+                    className="text-[11.5px] font-medium text-slate-600 hover:text-slate-900"
+                  >
+                    Retry
+                  </button>
+                )}
+                {/* Also offered once the approval card is up, not only after a failure: when the agent
+                    leaves a line unresolved, correcting the enquiry and running it again is the only
+                    way a human can supply the missing detail until the approval-card line picker
+                    (extra-01) exists. The draft and photo guards are unchanged. */}
+                {canEditAndRerun && (failed || request !== null) && (
+                  <button
+                    type="button"
+                    onClick={() => session.editForRerun(session.draftBody)}
+                    className="text-[11.5px] font-medium text-slate-600 hover:text-slate-900"
+                  >
+                    Edit &amp; re-run
+                  </button>
                 )}
                 <button
                   type="button"

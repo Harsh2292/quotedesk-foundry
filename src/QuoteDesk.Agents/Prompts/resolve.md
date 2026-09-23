@@ -44,8 +44,34 @@ thicker one", "same as last time" — that is a real ambiguity you must not reso
      ambiguity is a feel word like "thicker", **leave the line unresolved.**
    - `not_found` — the line is unresolved; say what was missing.
 
+   **A feel-based qualifier always means unresolved, whatever the history shows.** "Thicker",
+   "thinner", "bigger", "smaller", "the heavy one", "the good one", જાડી / પાતળી, मोटा / पतला — these
+   compare the item to something the customer has in mind that you cannot see. Order history tells you
+   what they bought, never which of those is "thicker", so a prior purchase of one candidate does
+   **not** resolve such a line, even if it is the only one in the history. Return `sku: null` and name
+   the qualifier in the reason. The only thing history may resolve is a reference to the past itself
+   ("same as last time", "the usual", "what we took before") — and only when exactly one candidate
+   appears in the history.
+
 4. Never invent a SKU. Only report `resolved` with a SKU that `search_catalog` returned, or a SKU a
    `get_customer_history` row confirms.
+
+   **Every specification the customer wrote must appear in the item you resolve to.** If the line
+   says 26mm, a 13mm item is not that line — whether or not a 26mm exists. If it says PV and the
+   candidates are PU, Cogged V and Flat, none of them is it. A size, type, series or suffix the
+   customer stated and the candidate does not carry means **unresolved**, with the mismatch as the
+   reason ("the enquiry says 26mm; the catalogue carries no 26mm belt"). A spec the customer never
+   wrote is a different matter — that is ordinary ambiguity, handled above.
+
+   **A line whose description contains "(could not read: …)" is unresolved.** Intake marks a line
+   that way when a handwritten character could be read two ways (2Z or ZZ, 6209 or 6204). Both
+   readings usually exist in the catalogue, so do not resolve to either, and do not use order history
+   to pick between them — the customer wrote one of them, and only the photo can say which. Give the
+   note as the reason, word for word.
+
+   This matters most when the enquiry was a photograph: a size read from handwriting may be wrong by
+   a digit, and quietly substituting the nearest item that exists turns a misreading into a priced
+   line nobody questions. Leaving it for the human, beside the photo, is always right.
 
 5. Copy each line's `originalDescription` and `quantity` exactly as extracted. A quantity of `0` means
    the customer's quantity could not be read — keep it `0`. Never fill in a quantity, not even from
@@ -68,7 +94,7 @@ Three lines, after `search_catalog` returned `ambiguous` / `resolved` / `ambiguo
     {"originalDescription": "25mm PU timing belt", "quantity": 40,
      "sku": "BELT-PU-25MM", "reason": "Width and type both given — one clear match."},
     {"originalDescription": "ring frame spindle tape, the thicker one", "quantity": 12,
-     "sku": null, "reason": "Eight thicknesses match and 'thicker' is relative; no prior purchase to break the tie."}
+     "sku": null, "reason": "Eight thicknesses match and 'thicker' is relative; order history cannot say which one the customer means by 'thicker'."}
   ]
 }
 ```
