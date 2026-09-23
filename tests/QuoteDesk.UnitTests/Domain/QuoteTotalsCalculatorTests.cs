@@ -33,6 +33,29 @@ public class QuoteTotalsCalculatorTests
         totals.GrandTotal.Should().Be(1_180m);
     }
 
+    [Theory]
+    [InlineData(FreightZone.Local)]
+    [InlineData(FreightZone.Regional)]
+    [InlineData(FreightZone.National)]
+    public void Calculate_NoLines_EverythingIsZeroIncludingFreight(FreightZone zone)
+    {
+        var totals = QuoteTotalsCalculator.Calculate([], zone);
+
+        totals.Subtotal.Should().Be(0m);
+        totals.Freight.Should().Be(0m, "a quote with nothing on it has nothing to ship");
+        totals.Tax.Should().Be(0m);
+        totals.GrandTotal.Should().Be(0m);
+    }
+
+    [Fact]
+    public void Calculate_OneZeroValueLine_StillChargesFreight()
+    {
+        // The boundary of the rule: it is about having no lines, not about a zero subtotal.
+        var totals = QuoteTotalsCalculator.Calculate([Line(0m)], FreightZone.Regional);
+
+        totals.Freight.Should().BeGreaterThan(0m);
+    }
+
     [Fact]
     public void Calculate_RegionalZoneBelowWaiverThreshold_ChargesFreightAndTaxesIt()
     {

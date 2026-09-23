@@ -38,7 +38,8 @@ thicker one", "same as last time" — that is a real ambiguity you must not reso
 3. Read each result's `outcome`:
    - `resolved` — take `resolvedSku`.
    - `ambiguous` — call `get_customer_history` for this customer (pass the `sku` of one candidate to
-     check a specific variant, or omit `sku` to see recent orders). A prior purchase of one candidate
+     check a specific variant, or omit `sku` to see every product this customer has bought — one row
+     per SKU, however long ago). A prior purchase of one candidate
      SKU resolves the line, with that as your stated reason. If history does not decide it, or the
      ambiguity is a feel word like "thicker", **leave the line unresolved.**
    - `not_found` — the line is unresolved; say what was missing.

@@ -124,6 +124,39 @@ public class RepositoryTests(RepositoryFixture fixture)
     }
 
     [Fact]
+    public async Task OrderHistory_NoSku_IncludesAPurchaseOlderThanTwentyNewerOrders()
+    {
+        // Jai Fabrics' last 6209-2Z purchase has 20 newer orders in front of it — exactly what the old
+        // "20 most recent rows" overview hid (foundry-07 baseline, 2026-09-22).
+        var jaiFabrics = await fixture.Customers.FindByEmailDomainAsync("jaifabrics.com", CancellationToken.None);
+
+        var history = await fixture.OrderHistory.GetByCustomerAsync(jaiFabrics!.Id, sku: null, CancellationToken.None);
+
+        history.Should().Contain(o => o.Sku == "BRG-6209-2Z");
+    }
+
+    [Fact]
+    public async Task OrderHistory_NoSku_ReturnsOneRowPerSkuNewestFirst()
+    {
+        var jaiFabrics = await fixture.Customers.FindByEmailDomainAsync("jaifabrics.com", CancellationToken.None);
+
+        var history = await fixture.OrderHistory.GetByCustomerAsync(jaiFabrics!.Id, sku: null, CancellationToken.None);
+
+        history.Select(o => o.Sku).Should().OnlyHaveUniqueItems();
+        history.Select(o => o.OrderedAt).Should().BeInDescendingOrder();
+        var latest2Z = await fixture.OrderHistory.GetByCustomerAsync(jaiFabrics.Id, "BRG-6209-2Z", CancellationToken.None);
+        history.Single(o => o.Sku == "BRG-6209-2Z").OrderedAt.Should().Be(latest2Z[0].OrderedAt, "the overview keeps each SKU's latest purchase");
+    }
+
+    [Fact]
+    public async Task OrderHistory_UnknownCustomer_ReturnsEmpty()
+    {
+        var history = await fixture.OrderHistory.GetByCustomerAsync(int.MaxValue, sku: null, CancellationToken.None);
+
+        history.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Catalog_MarginFloorCase_HasATenPercentListToCostSpread()
     {
         var item = await fixture.Catalog.GetBySkuAsync("GEAR-M2-40T", CancellationToken.None);

@@ -62,10 +62,10 @@ internal sealed class FakeOrderHistoryRepository : IOrderHistoryRepository
     public Task<IReadOnlyList<OrderHistoryRecord>> GetByCustomerAsync(int customerId, string? sku, CancellationToken cancellationToken)
     {
         var query = Orders.Where(o => o.CustomerId == customerId);
-        if (sku is not null)
-        {
-            query = query.Where(o => o.Sku == sku);
-        }
+        query = sku is not null
+            ? query.Where(o => o.Sku == sku)
+            // Mirrors OrderHistoryRepository: without a SKU, the latest purchase of each SKU.
+            : query.GroupBy(o => o.Sku).Select(g => g.OrderByDescending(o => o.OrderedAt).First());
 
         return Task.FromResult<IReadOnlyList<OrderHistoryRecord>>([.. query.OrderByDescending(o => o.OrderedAt)]);
     }

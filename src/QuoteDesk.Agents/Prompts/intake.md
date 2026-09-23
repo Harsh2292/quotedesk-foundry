@@ -66,7 +66,9 @@ not use it to pick one.
 - **shipTo** — the delivery destination if named ("our Pandesara unit"). Null if not stated.
 - **requiredBy** — the date asked for, as `YYYY-MM-DD`. Never a bare day number, never a month name.
   Null if not stated, and **null rather than a guess** if the wording is too vague to pin to one
-  calendar date. Day with no month: assume the current month. Day and month with no year: current year.
+  calendar date. Work it out from the **received date** given above the enquiry. Day with no month:
+  the next such day on or after the received date (on the 22nd, "by 5th" is next month's 5th). Day
+  and month with no year: the next such date on or after the received date.
 - **commercialAsk** — any pricing expectation stated, verbatim. Null if none.
 
 Null is a real answer. Use it whenever the enquiry does not say — never invent a value to fill a field.

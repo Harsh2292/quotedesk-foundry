@@ -569,7 +569,8 @@ Agent Service runtime, which this app does not run (docs/FOUNDRY-PLAN.md §4d).
 
 **Resolved in task foundry-06 — agent identity and tracing.** Each of the three agents is built with
 an explicit, stable `ChatClientAgentOptions.Id` (`quotedesk-intake-v1`, `quotedesk-resolve-v1`,
-`quotedesk-narrate-v1`, Foundry's `name:version` convention) and wrapped once with
+`quotedesk-narrate-v1` — the `name-vN` form Microsoft documents for `otel_agent_id`; an earlier
+colon form was corrected on 2026-09-22) and wrapped once with
 `.AsBuilder().UseOpenTelemetry("QuoteDesk.Agents", …)`. Both live in
 `QuoteDesk.Agents.Pipeline.AgentInstrumentation`/`AgentIdentity`.
 

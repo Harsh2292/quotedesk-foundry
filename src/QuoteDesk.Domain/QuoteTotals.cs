@@ -19,7 +19,10 @@ public static class QuoteTotalsCalculator
         ArgumentNullException.ThrowIfNull(lines);
 
         var subtotal = Money.Round(lines.Sum(l => l.LineTotal));
-        var freight = FreightPolicy.ResolveFreight(zone, subtotal);
+        // Nothing to ship, nothing to charge: a quote whose every line went unresolved must not
+        // carry a freight charge on its own (foundry-07 baseline — an unknown sender's all-unresolved
+        // quote showed ₹531 for no goods).
+        var freight = lines.Count == 0 ? 0m : FreightPolicy.ResolveFreight(zone, subtotal);
         var taxableValue = subtotal + freight;
         var tax = Money.Round(taxableValue * GstRatePct);
         var grandTotal = Money.Round(taxableValue + tax);

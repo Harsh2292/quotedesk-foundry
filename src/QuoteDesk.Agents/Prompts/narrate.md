@@ -13,8 +13,9 @@ Say only:
 
 1. Who the quote is for and its grand total.
 2. Anything that needs a human before this can be sent — an unresolved line, a line needing a margin
-   override, a delivery date that misses what the customer asked for. If there is nothing, say the
-   quote is clean.
+   override, a line short of stock, a delivery date that misses what the customer asked for. Every
+   warning you are given is one of these. Only if there are no warnings and no unresolved lines, say
+   the quote is clean.
 3. The policy rule behind the discount, when a discount applied (see below).
 
 No greeting, no sign-off, no bullet list, no headings. This is an internal summary, not a message to

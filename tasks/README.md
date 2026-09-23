@@ -3,7 +3,7 @@
 The work queue and **the only place status lives**. Each task is finishable in one sitting and
 delivers behaviour through every layer it touches.
 
-**Start here: `/task foundry-06`.** `foundry-00` (the fork itself) is already done — see its notes.
+**Start here: `/task foundry-07`** — the dataset exists; the 10 live runs and Run A remain. `foundry-00` (the fork itself) is already done — see its notes.
 
 You type `/task foundry-NN` and `/clear`, plus plan mode with `Shift + Tab`. Verification, the
 handover note and the status update happen automatically as part of finishing a task. This is the
@@ -22,7 +22,7 @@ fork's equivalent of that project's `docs/SPEC.md` — the plan each task file i
 | ~~foundry-04 multi-part~~ | ⏸ **Ignore for now** — [several photos + text → one quote](task-extra-06-multi-part-enquiries.md) (designed, deferred for time; tracked as extra-06) | on hold |
 | ~~foundry-04b~~ | ⏸ **Ignore for now** — [several enquiries at once](task-extra-07-batch-enquiries.md) (designed, deferred for time; tracked as extra-07) | on hold |
 | foundry-05 | [Quotation Policy grounding](task-foundry-05-policy-grounding.md) | done |
-| foundry-06 | [Observability + agent registration](task-foundry-06-observability-registration.md) | in progress — code done, both builds and 309 tests green; **needs Harsh**: connect App Insights, grant Log Analytics Reader, set two user-secrets, register both agents, screenshot. Steps in the task file. |
+| foundry-06 | [Observability + agent registration](task-foundry-06-observability-registration.md) | done — both agents registered and tracing, verified against a real trace 2026-09-22; only the Traces screenshots remain (Harsh) |
 | foundry-07 | [Evaluation](task-foundry-07-evaluation.md) | todo |
 | foundry-08 | [Video and document](task-foundry-08-submission.md) | todo |
 

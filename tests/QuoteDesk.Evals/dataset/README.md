@@ -77,3 +77,22 @@ of proportion to what it measures:
 - Two perfect scores say nothing about the metrics that were not run.
 - External agents are a preview feature: no human evaluation, no trace-to-dataset conversion and no
   red teaming are available for them.
+
+## Corrections — 2026-09-22, after the baseline runs
+
+Two expectations were wrong about the **data**, not about the agent, and were corrected deliberately
+under the rule above:
+
+- **`worked-example` and `ambiguous-no-history`** both claimed that no customer had ever bought a
+  spindle tape. False: the seed has 130 spindle-tape orders. Shreeji Textiles bought `SPT-RF-7MM`
+  and `SPT-RF-4MM`; Jai Textiles bought several tapes across applications. The claim above that
+  "every factual claim was read from the database" did not hold for these two.
+- **`worked-example`** now accepts `SPT-RF-7MM` resolved *from that history, with the reason
+  stated*, as well as leaving the line for a human (Harsh's decision). Any other width is a failure.
+  The late-delivery clause was also made explicit.
+- **`ambiguous-no-history`** keeps its expectation (must stay unresolved); only its reasoning was
+  corrected — the query names no application and no width, and the customer's history is mixed.
+
+The baseline responses in `response` are from live runs on 2026-09-22 (enquiries 5003–5010), taken
+before any fix. `quotedesk-eval-v1-upload.jsonl` is the file uploaded to Foundry: the nine rows that
+have a response, carrying only `id`, `query`, `response` and `ground_truth`. The photo case joins in v2.

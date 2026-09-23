@@ -52,6 +52,12 @@ public sealed class QuoteDeskApiFactory : WebApplicationFactory<Program>, IAsync
         // that default is what actually changed in this task, and a test relying on it implicitly
         // would silently start needing a real Foundry endpoint the next time it changes again.
         Environment.SetEnvironmentVariable("Llm__Provider", "foundry");
+        // Forced off: once a developer puts the real App Insights connection string in user-secrets
+        // (foundry-06), the test host otherwise registers Azure Monitor — sending test runs to the real
+        // resource, and adding a second process-wide listener on "QuoteDesk.Agents" whose sampler tag
+        // collides with the first ("microsoft.sample_rate" already present), failing pipeline tests at
+        // random (found 2026-09-22). CLAUDE.md: CI and tests stay offline.
+        Environment.SetEnvironmentVariable("AzureMonitor__ConnectionString", "");
 
         // Every test in this collection shares one host, and therefore one process-lifetime rate
         // limiter (task 09) — a real production limit (10 sign-ins/minute, for instance) is far

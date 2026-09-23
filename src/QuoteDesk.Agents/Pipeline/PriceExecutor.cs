@@ -29,6 +29,14 @@ public sealed class PriceExecutor(string id, PricingTools pricingTools, AIAgent 
 
         var priced = await pricingTools.PriceQuoteAsync(message.CustomerId, lineRequests, cancellationToken);
 
+        // Before narration, so the sentence can name a late line rather than calling the quote clean.
+        var dateWarnings = RequiredByCheck.Warnings(
+            priced.Lines, message.Extracted.RequiredBy, RequiredByCheck.ReceivedOn(message.Enquiry.ReceivedAt));
+        if (dateWarnings.Count > 0)
+        {
+            priced = priced with { Warnings = [.. priced.Warnings, .. dateWarnings] };
+        }
+
         var narration = await NarrateAsync(message, priced, cancellationToken);
 
         return new ApprovalRequest

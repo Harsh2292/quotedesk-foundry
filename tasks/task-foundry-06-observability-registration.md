@@ -21,7 +21,9 @@ could never attribute two runs' traces to "the same agent." Build each agent wit
 `AsAIAgent(IChatClient, ChatClientAgentOptions, ...)` overload and an explicit, stable id:
 `new ChatClientAgentOptions { Id = "quotedesk-intake-v1", Name = "quotedesk-intake", ChatOptions = new()
 { Instructions = ..., Tools = ... } }` — likewise `quotedesk-resolve-v1` and `quotedesk-narrate-v1`.
-Foundry's own convention for these ids is `name:version`.
+~~Foundry's own convention for these ids is `name:version`.~~ **Corrected 2026-09-22:** Microsoft's
+documented form is `name-vN` (`travel-planner-agent-v1`); the ids are `quotedesk-intake-v1`,
+`quotedesk-resolve-v1`, `quotedesk-narrate-v1`.
 
 ### Tracing
 
@@ -74,17 +76,16 @@ id `quotedesk-intake-v1`, and `quotedesk-resolve` with `quotedesk-resolve-v1`. R
 
 ## Acceptance criteria
 
-- [ ] Every agent built with a stable, explicit `Id` — verified by inspecting two consecutive runs'
-      spans and confirming the same `gen_ai.agent.id`
-- [ ] `Llm:TraceSensitiveData` wired through, default `false`
-- [ ] Tracing is fully inert (no Azure calls, no package initialisation cost beyond a no-op) when
-      `AzureMonitor:ConnectionString` is empty — confirmed by running the full test suite with it unset
-- [ ] Both `quotedesk-intake` and `quotedesk-resolve` registered in the Foundry portal, showing real
-      traces from a real run
-- [ ] Screenshots of both agents' Traces tabs saved for the document
-- [ ] Workflow-shape check done and recorded: either proven unchanged (a pre-change pending approval
-      still approves), or version-stamping built with its tests
-- [ ] Both build configs and the full non-eval test suite pass with no Azure Monitor connection configured
+- [x] Every agent built with a stable, explicit `Id` — verified by `AgentTelemetryTests` (two runs, same
+      `gen_ai.agent.id`) **and** in a real trace on 2026-09-22 (all three ids present)
+- [x] `Llm:TraceSensitiveData` wired through, default `false` — `true` in local user-secrets
+- [x] Tracing is fully inert when `AzureMonitor:ConnectionString` is empty — full suite passes offline
+- [x] Both `quotedesk-intake` and `quotedesk-resolve` registered in the Foundry portal, showing real
+      traces from a real run — trace `c09a15db0ed5370cea516858222511c6`, 56 spans, 2026-09-22
+- [ ] **Screenshots of both agents' Traces tabs saved for the document** — Harsh, still open
+- [x] Workflow-shape check done and recorded — proven unchanged by `TypeId.IsMatch` semantics (see
+      Notes). The empirical check (a pre-change pending approval still approving) was not run.
+- [x] Both build configs and the full non-eval test suite pass with no Azure Monitor connection configured
 
 ## Out of scope
 
@@ -93,7 +94,7 @@ them is the next task.
 
 ## Notes on completion
 
-**Code half done 2026-09-18; the portal half is Harsh's and is what remains.**
+**Code half done 2026-09-18. Portal half done 2026-09-22 — only the two Traces screenshots remain.**
 
 **Package:** `Azure.Monitor.OpenTelemetry.AspNetCore` **1.6.0** added to `QuoteDesk.Api` — the version
 NuGet resolved, clean under `-warnaserror` (no `NU1903` advisory, which is what ruled
@@ -158,8 +159,8 @@ whether the hard part worked.
 1. **Connect Application Insights.** Foundry portal -> your project -> Agents -> Traces -> Connect.
    Create one in `quotedesk-rg`, West US 3, if none exists. Traces are not stored retroactively, so a
    run before this step is lost.
-2. **Give your own account the two roles** (this replaces the managed-identity/Log Analytics Reader
-   steps this file previously carried, which the docs do not ask for):
+2. **Give your own account the two roles** — and see the note below them: the project's managed
+   identity **also** needs access, for Insights and Evaluation:
    - **Foundry User** on the Foundry project. Recently renamed from *Azure AI User*, so either label
      may appear.
    - **Reader** or **Monitoring Reader** on the Application Insights resource, granted in Azure

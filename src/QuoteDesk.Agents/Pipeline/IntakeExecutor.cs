@@ -98,7 +98,14 @@ public sealed class IntakeExecutor(
     /// a text note right before it marks where it starts.</summary>
     internal static ChatMessage BuildPrompt(EnquiryInput enquiry)
     {
-        var text = UntrustedContent.Wrap(enquiry.RawBody);
+        // The received date is ours, not the customer's, so it sits outside the untrusted wrapper. It
+        // is what lets "need by 5th", written on the 22nd, become next month's 5th rather than a date
+        // already gone (foundry-07 baseline run, 2026-09-22).
+        var text = $"""
+            Received on {RequiredByCheck.ReceivedOn(enquiry.ReceivedAt):yyyy-MM-dd} (India).
+
+            {UntrustedContent.Wrap(enquiry.RawBody)}
+            """;
         if (enquiry.ImageDataUrl is null)
         {
             return new ChatMessage(ChatRole.User, text);

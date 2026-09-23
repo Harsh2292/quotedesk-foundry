@@ -90,6 +90,15 @@ export function DeskScreen({ route }: { route: DeskRoute }) {
             >
               Process enquiry
             </Button>
+            {/* Say why the button is off rather than leaving it silently disabled (foundry-07's
+                empty-enquiry case): nothing is sent to the model, and a person has to type it in. */}
+            {session.draftBody.trim().length === 0 && session.draftImage === null && (
+              <p className="text-[12px] text-slate-500">
+                Nothing to quote yet — paste the enquiry or attach a photo. If the customer's message
+                can't be read (a voice note, an unclear scan), type it in by hand; the agent never
+                guesses at an empty enquiry.
+              </p>
+            )}
             {session.submitError && (
               <p className="text-[12px] text-red-600">{session.submitError}</p>
             )}

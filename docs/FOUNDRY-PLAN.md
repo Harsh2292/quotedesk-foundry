@@ -522,8 +522,15 @@ trace-based evaluation of individual interactions."*
 **Corrected — the roles.** This plan previously called for *Log Analytics Reader* on the App Insights
 resource **and** its workspace, granted to the project's managed identity. That is not what the docs
 require. They require, on **Harsh's own identity**: **Foundry User** on the project, and **Reader** or
-**Monitoring Reader** on the connected Application Insights resource. Simpler, and the managed-identity
-assignment was never needed. (Note the docs also record a rename: *Foundry User* was previously
+**Monitoring Reader** on the connected Application Insights resource.
+
+**Corrected again, 2026-09-22, by the portal itself: the managed-identity access *is* needed — for
+some features.** Connecting App Insights offers two auth types. **API Key** is enough for the
+**Traces** tab. But **Insights** and trace-based **Evaluation** run as the *project's managed
+identity*, and the portal showed "Setup incomplete: the project managed identity needs access to the
+Application Insights resource" until that access was granted (Harsh used the portal's **Resolve**
+button). So the plan's original managed-identity step was right for those two features, and the
+docs' Reader/Monitoring Reader roles cover viewing only. Do not repeat the mistake of removing it. (Note the docs also record a rename: *Foundry User* was previously
 *Azure AI User*, so either name may appear in the portal.)
 
 **Corrected — the id format.** This plan invented `name:version` with a colon. The documented example

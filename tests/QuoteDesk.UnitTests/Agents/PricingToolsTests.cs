@@ -94,4 +94,36 @@ public class PricingToolsTests
         result.Subtotal.Should().Be(0m);
         result.Warnings.Should().BeEmpty("a matched customer with no lines is not itself a problem worth flagging");
     }
+
+    [Fact]
+    public async Task PriceQuoteAsync_UnknownSenderWithNoLines_ChargesNothingAtAll()
+    {
+        // foundry-07 baseline: an unknown sender whose one line went unresolved was quoted ₹531 —
+        // Regional freight plus GST on it — for no goods.
+        var tools = new PricingTools(new FakeCustomerRepository(), new FakeCatalogRepository(), new FakeStockRepository(), new FakePriceRuleRepository(), new FixedTimeProvider(Now));
+
+        var result = await tools.PriceQuoteAsync(null, [], CancellationToken.None);
+
+        result.Freight.Should().Be(0m);
+        result.GrandTotal.Should().Be(0m);
+    }
+
+    [Theory]
+    [InlineData(50, 500, true)]
+    [InlineData(499, 500, true)]
+    [InlineData(500, 500, false)]
+    [InlineData(0, 1, true)]
+    public async Task PriceQuoteAsync_StockAgainstQuantity_WarnsOnlyWhenShort(int onHand, int quantity, bool expectWarning)
+    {
+        var catalog = new FakeCatalogRepository();
+        catalog.Items.Add(new CatalogItemRecord(1, "BRG-6200-2RS", "6200 Series Ball Bearing (2RS)", "Bearings", "Nos", 100.00m, 79.12m, null));
+        var stock = new FakeStockRepository();
+        stock.Stock.Add(new StockRecord("BRG-6200-2RS", onHand, 5, 100));
+        var tools = new PricingTools(new FakeCustomerRepository(), catalog, stock, new FakePriceRuleRepository(), new FixedTimeProvider(Now));
+
+        var result = await tools.PriceQuoteAsync(null, [new QuoteLineRequest { Sku = "BRG-6200-2RS", Quantity = quantity }], CancellationToken.None);
+
+        result.Lines.Should().ContainSingle("short stock delays a line, it never drops it");
+        result.Warnings.Any(w => w.Contains("short of stock", StringComparison.Ordinal)).Should().Be(expectWarning);
+    }
 }

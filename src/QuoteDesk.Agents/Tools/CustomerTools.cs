@@ -56,14 +56,15 @@ public sealed class CustomerTools(ICustomerRepository customers, IOrderHistoryRe
     }
 
     [Description(
-        "Lists a customer's prior purchases, most recent first. This is what resolves phrases like " +
+        "Lists a customer's prior purchases, most recent first — without a SKU, the latest purchase of " +
+        "every product they have ever bought; with a SKU, that product's purchases. This is what resolves phrases like " +
         "'same as last time' or 'our usual rate' — call it whenever an enquiry references past business, " +
         "and read the SKU and price it names rather than assuming the customer means the most recent order " +
         "of anything. An empty list means no matching prior purchases were found.")]
     public async Task<IReadOnlyList<PriorPurchase>> GetCustomerHistoryAsync(
         [Description("The customer's Id, from a prior resolve_customer call.")]
         int customerId,
-        [Description("Narrows the history to one SKU. Omit (null) to see every prior purchase.")]
+        [Description("Narrows the history to one SKU. Omit (null) to see every product this customer has bought, one row per SKU.")]
         string? sku,
         CancellationToken cancellationToken)
     {

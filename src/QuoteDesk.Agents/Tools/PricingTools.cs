@@ -72,6 +72,14 @@ public sealed class PricingTools(
                 ? (DeliveryDates?)null
                 : DeliveryDateCalculator.Calculate(now, stockRecord.OnHand, line.Quantity, stockRecord.LeadTimeDays, zone, QuoteDeskCalendar.Holidays);
 
+            // Stated, not left for someone to infer from a later date (foundry-07 baseline: a 50-on-hand
+            // line for 500 was narrated as a normal quote). On-hand counts are already what
+            // check_stock returns, so this exposes nothing new.
+            if (stockRecord is not null && stockRecord.OnHand < line.Quantity)
+            {
+                warnings.Add($"'{item.Sku}' is short of stock: {stockRecord.OnHand} on hand against {line.Quantity} requested, so dispatch waits for the {stockRecord.LeadTimeDays}-day supplier lead time.");
+            }
+
             domainLines.Add(priced);
             deliveryDates.Add(dates);
         }

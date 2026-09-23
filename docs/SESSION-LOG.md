@@ -1492,3 +1492,17 @@ the Founderz upload form; the video on the 24th.
 
 **Next:** restart API (`dotnet run --project src/QuoteDesk.Api --launch-profile http`) and web
 (`npm run dev`), do the 10 dataset runs, then configure Evaluation/Insights against that data.
+
+## 2026-09-22 (evening) — foundry-07 Evaluation: live baseline, fixes, Run A v1
+
+**Done:** 8 dataset cases run live (enquiries 5003–5010, 3 tabs in parallel); `response` filled from `AgentRuns.TraceJson`. Foundry Run A v1 done: dataset `quotedesk-eval-v1-clean` (8 rows), run `quotedesk-dataset-baseline-v1`, judge gpt-5.6-luna, 8 evaluators. Results in `tests/QuoteDesk.Evals/results/baseline-v1.jsonl`: Coherence 8/8 (4.50), Fluency 8/8 (3.88), Relevance 7/8 (3.88), ResponseCompleteness 7/8 (3.38), IntentResolution 6/8 (3.12), Violence 8/8, IndirectAttack 8/8, TaskCompletion 2/8; ~150k judge tokens. Fixes for what the baseline (and the judge) found, all with tests: history returns one row per SKU (was last 20 orders, hid Jai Fabrics' 6209-2Z); `RequiredByCheck` late-delivery warning; Intake told the received date ("by 5th" was read as a past date); short-stock warning in `PricingTools`; no freight on a quote with no lines (was ₹531 for nothing); Desk explains a blank enquiry. Test host forces `AzureMonitor__ConnectionString` empty — user-secrets had made pipeline tests flaky and sent test traffic to real App Insights. 241 unit + 90 integration green, both builds; submission document updated by a fork.
+
+**Files that matter:** `tests/QuoteDesk.Evals/dataset/` (full file, `-upload` file, README "Corrections"); `tests/QuoteDesk.Evals/results/`; `docs/submission/QuoteDesk-submission.html`.
+
+**Decisions made:** Harsh chose (b): SPT-RF-7MM resolved *from Shreeji's real history, reason stated* is acceptable for the worked example (two ground truths corrected — they falsely claimed no spindle-tape history; seed has 130). Empty enquiry dropped from the Foundry file (judge errors on an empty query); proven by a Desk screenshot instead. TaskCompletion failures (6/8 "not created or sent") are the approval gate working — explained in the document, not "fixed". Cut for time: Insights scan, Run B (trace eval), extra Monitor/App Insights screenshots, multi-photo (extra-06), WhatsApp. First Run A attempt used the wrong (full) file — kept as `baseline-v1-first-attempt.jsonl`, not reported.
+
+**Known gaps:** v1 responses omit ship-to (the judge noticed) — include `shipTo` in v2 rendering, leave v1 as graded. Photo demo case not yet run. The fill script lives only in the job tmp dir — rewrite if needed (render from `approval_required` payload). API runs locally with `RateLimiting__PipelinePermitPerDay=30` env override.
+
+**Blocked on Harsh:** commit (staged; message given in chat, plus new results/upload/README changes to add); Founderz anonymity rule check.
+
+**Next:** Harsh re-runs worked-example, repeat-customer, short-stock, unknown-sender (+ ideally the other 3) → build v2 upload file (with shipTo) → Run A v2 + Compare runs → FREEZE code → screenshots → document numbers/screenshots, README rewrite, word-for-word video script (demo = one photo + Kiran delivery text from kiran@shreejitextiles.com) → record and submit 24 Sep.
