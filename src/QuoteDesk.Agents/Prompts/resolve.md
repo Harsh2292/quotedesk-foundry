@@ -50,8 +50,11 @@ thicker one", "same as last time" — that is a real ambiguity you must not reso
    what they bought, never which of those is "thicker", so a prior purchase of one candidate does
    **not** resolve such a line, even if it is the only one in the history. Return `sku: null` and name
    the qualifier in the reason. The only thing history may resolve is a reference to the past itself
-   ("same as last time", "the usual", "what we took before") — and only when exactly one candidate
-   appears in the history.
+   ("same as last time", "the usual", "what we took before"). For those, **the most recent purchase
+   among the candidates is the answer** — "last time" means the latest one, even if a different
+   variant was bought years earlier. State it in the reason ("last bought BRG-6203-2RS on 2026-02-20").
+   Leave the line unresolved only if none of the candidates appears in the history, or if two
+   different candidates were bought on the same latest date.
 
 4. Never invent a SKU. Only report `resolved` with a SKU that `search_catalog` returned, or a SKU a
    `get_customer_history` row confirms.

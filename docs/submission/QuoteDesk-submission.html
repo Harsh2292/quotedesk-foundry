@@ -48,6 +48,20 @@
 <p class="meta">Microsoft Agent-a-Thon · Level 3, Architect track · Final activity submission</p>
 
 
+
+<div class="rule">
+<p style="margin:0 0 8px"><strong>At a glance</strong></p>
+<ul style="margin:0">
+  <li><strong>Problem:</strong> a spares distributor's sales desk spends about twenty minutes turning each informal enquiry — often a phone photo of a handwritten list in English, Hindi and Gujarati — into a priced quotation.</li>
+  <li><strong>What QuoteDesk does:</strong> two agents, running on Microsoft Foundry models, read the enquiry and work out what the customer means; prices, discounts, margins and dates are computed in code; a person approves every quote. A typed enquiry reaches a checked draft in about 40 seconds.</li>
+  <li><strong>What it refuses to do:</strong> guess. An unreadable word, a doubtful digit or "the thicker one" is left for the person, with the reason and the photo beside it.</li>
+  <li><strong>Microsoft Foundry, four ways:</strong> model inference, tracing, agent registration (Traces, Monitor, Insights) and evaluation.</li>
+  <li><strong>Evidence:</strong> a ten-case dataset with ground truth written first; baseline v1 found four real bugs, all fixed, and in v2 every quality evaluator passed on all eight scored cases (Figure 4). Foundry Insights found a further defect in real traces, fixed the same day. 335 automated tests.</li>
+  <li><strong>Built vs planned:</strong> paste and photo intake run today; WhatsApp, email, voice and hosting are designed, not built (Figure 5, §7).</li>
+  <li><strong>Code:</strong> <a href="https://github.com/Harsh2292/quotedesk-foundry">github.com/Harsh2292/quotedesk-foundry</a></li>
+</ul>
+</div>
+
 <h2>Summary</h2>
 
 <p>A distributor of textile-machinery spares receives enquiries written by people in a hurry, who know the products by nickname rather than part number: <em>"250 nos of the 6203 bearings, same as last time"</em>. Answering one takes a salesperson about twenty minutes of looking things up, and it usually happens that evening. QuoteDesk reads the enquiry — typed or photographed — works out what the customer actually means, prices it against the company's own rules, and puts a complete draft quotation in front of a human in about a minute — roughly 40 seconds for a typed enquiry, measured, and a little longer for a photographed list.</p>
@@ -453,6 +467,12 @@
 </table>
 
 <p>Two properties hold for every channel. <strong>An unknown sender is never guessed at</strong> — no customer match means list price and quantity discount only, no credit terms, and a "new customer — verify before sending" flag (the evaluation's unknown-sender case tests this). And <strong>everything that arrives is untrusted content</strong>, wrapped before any model sees it, whichever channel carried it (the prompt-injection case tests this).</p>
+
+
+<figure>
+  <img src="diagrams/fig5-target-architecture.svg" alt="The full system. Built and running: paste intake of a typed note and a photo, one enquiry shape with sender-to-customer matching, the Intake and Resolve agents, pricing in code, human approval with the photo, quote creation, the SQL database, Foundry models, tracing to Application Insights, Traces, Monitor and Insights per registered agent, dataset evaluation v1 to v2, and local hosting. Designed but not built: WhatsApp, email, phone and voice-note channels, whole threads, a line picker, replying on the same channel, connecting an existing ERP, scheduled evaluation with alerts, a custom evaluator, and hosting on Azure Container Apps.">
+  <figcaption><strong>Figure 5 — The full system.</strong> Solid boxes run today; dashed boxes are designed and not built. Every new channel ends in the same enquiry shape, so the agents, pricing, approval, tracing and evaluation stay as they are.</figcaption>
+</figure>
 
 <h4>Volume</h4>
 

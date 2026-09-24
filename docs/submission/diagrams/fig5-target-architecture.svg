@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 700" width="980" height="700" font-family="Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Target architecture: what is built today and what is designed but not built. Built: paste intake of text and a photo, the Intake and Resolve agents, pricing in code, human approval, quote creation, SQL data, Foundry models, tracing, monitoring, insights and dataset evaluation. Planned: WhatsApp, email and phone channels, several photos per message, a line picker on the approval card, replying on the same channel, connecting to an existing ERP, scheduled evaluation and alerts, trace-based scoring, and cloud hosting.">
+  <defs>
+    <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect width="980" height="700" fill="#ffffff"/>
+
+  <text x="24" y="36" font-size="17" font-weight="700" fill="#0f172a">Fig. 5 — The full system: what runs today, and what is designed next</text>
+  <text x="24" y="58" font-size="12" fill="#475569">Every new channel feeds the same pipeline. Nothing in the agents, pricing or approval changes to add one.</text>
+
+  <!-- legend -->
+  <rect x="690" y="76" width="26" height="16" rx="3" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="722" y="88" font-size="11" fill="#334155">Built and running</text>
+  <rect x="834" y="76" width="26" height="16" rx="3" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="866" y="88" font-size="11" fill="#334155">Designed, not built</text>
+
+  <!-- CHANNELS -->
+  <text x="24" y="104" font-size="11" font-weight="700" fill="#475569">CHANNELS</text>
+  <g font-size="10.5">
+    <rect x="24" y="114" width="196" height="50" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="36" y="134" font-weight="700" fill="#1e3a8a">Desk — paste</text>
+    <text x="36" y="151" fill="#1e40af">typed note and a phone photo</text>
+
+    <rect x="24" y="174" width="196" height="50" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="36" y="194" font-weight="700" fill="#334155">WhatsApp</text>
+    <text x="36" y="211" fill="#475569">Business Platform webhook, signed</text>
+
+    <rect x="24" y="234" width="196" height="50" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="36" y="254" font-weight="700" fill="#334155">Email</text>
+    <text x="36" y="271" fill="#475569">Microsoft Graph, sales mailbox</text>
+
+    <rect x="24" y="294" width="196" height="50" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="36" y="314" font-weight="700" fill="#334155">Phone call / voice note</text>
+    <text x="36" y="331" fill="#475569">Azure AI Speech → text (gu, hi, en)</text>
+
+    <rect x="24" y="354" width="196" height="50" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="36" y="374" font-weight="700" fill="#334155">A whole thread</text>
+    <text x="36" y="391" fill="#475569">several photos + messages, one quote</text>
+  </g>
+
+  <!-- arrows channels -> adapters -->
+  <g stroke="#64748b" stroke-width="1.4" fill="none">
+    <path d="M 220 139 L 248 200" marker-end="url(#a5)"/>
+    <path d="M 220 199 L 248 215" marker-end="url(#a5)" stroke-dasharray="4 3"/>
+    <path d="M 220 259 L 248 250" marker-end="url(#a5)" stroke-dasharray="4 3"/>
+    <path d="M 220 319 L 248 280" marker-end="url(#a5)" stroke-dasharray="4 3"/>
+    <path d="M 220 379 L 248 300" marker-end="url(#a5)" stroke-dasharray="4 3"/>
+  </g>
+
+  <!-- ADAPTER -->
+  <rect x="250" y="174" width="176" height="150" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="262" y="196" font-size="11.5" font-weight="700" fill="#1e3a8a">One enquiry shape</text>
+  <g font-size="10.5" fill="#1e40af">
+    <text x="262" y="216">channel · sender · text ·</text>
+    <text x="262" y="231">attachments</text>
+    <text x="262" y="256" font-weight="700" fill="#1e3a8a">Sender → customer</text>
+    <text x="262" y="273">email domain, then</text>
+    <text x="262" y="288">WhatsApp number, then</text>
+    <text x="262" y="303">company name</text>
+  </g>
+
+  <path d="M 426 222 L 450 222" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#a5)"/>
+
+  <!-- PIPELINE -->
+  <text x="452" y="140" font-size="11" font-weight="700" fill="#475569">PIPELINE — fixed order, checkpointed, one run per enquiry</text>
+  <g font-size="10.5" text-anchor="middle">
+    <rect x="452" y="152" width="92" height="70" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="498" y="176" font-weight="700" fill="#4c1d95">Intake</text>
+    <text x="498" y="192" fill="#5b21b6">agent · reads</text>
+    <text x="498" y="207" fill="#5b21b6">text + photo</text>
+
+    <rect x="552" y="152" width="92" height="70" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+    <text x="598" y="176" font-weight="700" fill="#4c1d95">Resolve</text>
+    <text x="598" y="192" fill="#5b21b6">agent · decides</text>
+    <text x="598" y="207" fill="#5b21b6">or refuses</text>
+
+    <rect x="652" y="152" width="92" height="70" rx="6" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+    <text x="698" y="176" font-weight="700" fill="#14532d">Price</text>
+    <text x="698" y="192" fill="#166534">code only —</text>
+    <text x="698" y="207" fill="#166534">never a model</text>
+
+    <rect x="752" y="152" width="92" height="70" rx="6" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+    <text x="798" y="176" font-weight="700" fill="#78350f">Approve</text>
+    <text x="798" y="192" fill="#92400e">a person, with</text>
+    <text x="798" y="207" fill="#92400e">the photo</text>
+
+    <rect x="852" y="152" width="104" height="70" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="904" y="176" font-weight="700" fill="#1e3a8a">Create quote</text>
+    <text x="904" y="192" fill="#1e40af">saved; send</text>
+    <text x="904" y="207" fill="#1e40af">recorded</text>
+  </g>
+  <g stroke="#64748b" stroke-width="1.4" fill="none">
+    <path d="M 544 187 L 552 187" marker-end="url(#a5)"/>
+    <path d="M 644 187 L 652 187" marker-end="url(#a5)"/>
+    <path d="M 744 187 L 752 187" marker-end="url(#a5)"/>
+    <path d="M 844 187 L 852 187" marker-end="url(#a5)"/>
+  </g>
+
+  <!-- planned under pipeline -->
+  <g font-size="10.5" text-anchor="middle">
+    <rect x="742" y="240" width="112" height="56" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="798" y="262" font-weight="700" fill="#334155">Line picker</text>
+    <text x="798" y="278" fill="#475569">pick the unclear item</text>
+
+    <rect x="862" y="240" width="94" height="56" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="909" y="262" font-weight="700" fill="#334155">Reply</text>
+    <text x="909" y="278" fill="#475569">same channel</text>
+  </g>
+  <g stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="3 3" fill="none">
+    <path d="M 798 222 L 798 240"/>
+    <path d="M 904 222 L 909 240"/>
+  </g>
+
+  <!-- DATA -->
+  <text x="452" y="330" font-size="11" font-weight="700" fill="#475569">BUSINESS DATA — reached only through typed tools</text>
+  <g font-size="10.5">
+    <rect x="452" y="340" width="232" height="64" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="464" y="362" font-weight="700" fill="#1e3a8a">SQL database</text>
+    <text x="464" y="379" fill="#1e40af">catalogue · stock · customers ·</text>
+    <text x="464" y="394" fill="#1e40af">order history · price rules</text>
+
+    <rect x="700" y="340" width="256" height="64" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="712" y="362" font-weight="700" fill="#334155">A distributor's existing ERP or billing</text>
+    <text x="712" y="379" fill="#475569">behind the same five data interfaces —</text>
+    <text x="712" y="394" fill="#475569">an integration, not a rebuild</text>
+  </g>
+  <path d="M 598 222 L 598 340" stroke="#64748b" stroke-width="1.4" fill="none" marker-end="url(#a5)"/>
+
+  <!-- FOUNDRY -->
+  <rect x="24" y="428" width="932" height="140" rx="8" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.2"/>
+  <text x="40" y="450" font-size="11.5" font-weight="700" fill="#4c1d95">MICROSOFT FOUNDRY — every agent run traced, measured and improved</text>
+  <g font-size="10.5">
+    <rect x="40" y="464" width="140" height="84" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="52" y="484" font-weight="700" fill="#1e3a8a">Models</text>
+    <text x="52" y="501" fill="#1e40af">nano · sol · mini,</text>
+    <text x="52" y="516" fill="#1e40af">routed per stage</text>
+
+    <rect x="192" y="464" width="140" height="84" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="204" y="484" font-weight="700" fill="#1e3a8a">Tracing</text>
+    <text x="204" y="501" fill="#1e40af">OpenTelemetry →</text>
+    <text x="204" y="516" fill="#1e40af">App Insights</text>
+
+    <rect x="344" y="464" width="140" height="84" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="356" y="484" font-weight="700" fill="#1e3a8a">Traces, Monitor,</text>
+    <text x="356" y="501" font-weight="700" fill="#1e3a8a">Insights</text>
+    <text x="356" y="518" fill="#1e40af">per registered agent</text>
+
+    <rect x="496" y="464" width="140" height="84" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="508" y="484" font-weight="700" fill="#1e3a8a">Dataset evaluation</text>
+    <text x="508" y="501" fill="#1e40af">baseline v1 → fixes</text>
+    <text x="508" y="516" fill="#1e40af">→ v2, same judge</text>
+
+    <rect x="648" y="464" width="140" height="84" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="660" y="484" font-weight="700" fill="#334155">Scheduled evaluation</text>
+    <text x="660" y="501" fill="#475569">on live traces,</text>
+    <text x="660" y="516" fill="#475569">with alerts</text>
+
+    <rect x="800" y="464" width="140" height="84" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="812" y="484" font-weight="700" fill="#334155">Custom evaluator</text>
+    <text x="812" y="501" fill="#475569">scores the draft-for-</text>
+    <text x="812" y="516" fill="#475569">approval task</text>
+  </g>
+
+  <!-- HOSTING -->
+  <text x="24" y="598" font-size="11" font-weight="700" fill="#475569">HOSTING</text>
+  <g font-size="10.5">
+    <rect x="24" y="608" width="440" height="64" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+    <text x="36" y="630" font-weight="700" fill="#1e3a8a">Today: runs locally</text>
+    <text x="36" y="647" fill="#1e40af">API + web app, SQL Server in Docker, Foundry in the cloud;</text>
+    <text x="36" y="662" fill="#1e40af">several enquiries run at once, each its own checkpointed run</text>
+
+    <rect x="480" y="608" width="476" height="64" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="492" y="630" font-weight="700" fill="#334155">Production: Azure Container Apps + Azure SQL + Static Web Apps</text>
+    <text x="492" y="647" fill="#475569">the recipe the original QuoteDesk already runs on; secrets in the</text>
+    <text x="492" y="662" fill="#475569">host's secret store; container and CI already built</text>
+  </g>
+</svg>
