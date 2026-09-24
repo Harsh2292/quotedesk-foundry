@@ -213,7 +213,17 @@ public class EnquiryEndpointsTests(QuoteDeskApiFactory factory)
         using var client = await AuthenticatedClientAsync(kestrel, "body-too-big@shreejitextiles.example");
         var oversizedBody = new string('x', (int)EnquiryEndpoints.MaxPasteRequestBytes + 1);
 
-        var response = await client.PostAsJsonAsync("/api/enquiries", new PasteEnquiryRequest(oversizedBody, null), CancellationToken.None);
+        // Content-Length up front plus "Expect: 100-continue", so Kestrel answers 413 before the body is
+        // sent. Streaming the body instead raced the server closing the connection mid-upload: the
+        // client then saw a socket error rather than the 413 (failed once on CI, 2026-09-24).
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new PasteEnquiryRequest(oversizedBody, null), JsonSerializerOptions.Web),
+            System.Text.Encoding.UTF8,
+            "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/enquiries") { Content = content };
+        request.Headers.ExpectContinue = true;
+
+        var response = await client.SendAsync(request, CancellationToken.None);
 
         response.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge);
     }
